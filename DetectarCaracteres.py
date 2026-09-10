@@ -1,4 +1,4 @@
-# DetectarCaracteres.py
+        # DetectarCaracteres.py
 # -*- coding: utf-8 -*
 
 import cv2
@@ -269,7 +269,11 @@ def encontrarPossivelCaractereNaPlaca(imgEscalaDeCinza, imgThreshold):
     imgThresholdCopia = imgThreshold.copy()
 
     # encontrar todos os Contornos na Placa
-    imgContours, contornos, npaHierarchy = cv2.findContours(imgThresholdCopia, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contornos, npaHierarchy = cv2.findContours(
+        imgThresholdCopia,
+        cv2.RETR_LIST,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
 
     for contour in contornos:  # para cada contorno
         possivelCaractere = PossivelCaractere.PossivelCaractere(contour)

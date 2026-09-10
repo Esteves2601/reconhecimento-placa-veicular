@@ -130,7 +130,11 @@ def findPossivelCaracteresInScene(imgThreshold):
 
     imgThresholdCopia = imgThreshold.copy()
 
-    imgContours, contornos, npaHierarchy = cv2.findContours(imgThresholdCopia, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)   # encontrar todos os Contornos
+    contornos, npaHierarchy = cv2.findContours(
+        imgThresholdCopia,
+        cv2.RETR_LIST,
+        cv2.CHAIN_APPROX_SIMPLE
+    )   # encontrar todos os Contornos
 
     altura, largura = imgThreshold.shape
     imgContours = np.zeros((altura, largura, 3), np.uint8)

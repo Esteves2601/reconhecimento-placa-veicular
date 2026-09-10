@@ -31,7 +31,7 @@ def main():
         # e fechar programa
     # end if
 
-    imgCenaOriginal = cv2.imread("imagens/f15.jpg")
+    imgCenaOriginal = cv2.imread("imagens/5.png")
     # abrir imagem
 
     if imgCenaOriginal is None:
@@ -111,12 +111,37 @@ def desenharRetanguloVermelhoAoRedorDaPlaca(imgCenaOriginal, licPlaca):
     p2fRectPoints = cv2.boxPoints(licPlaca.rrLocationOfPlacaInScene)
     # obter 4 vértices do retângulo girado
 
-    cv2.line(imgCenaOriginal, tuple(p2fRectPoints[0]), tuple(p2fRectPoints[1]), ESCALA_VERMELHO, 2)
-    # desenhar 4 linhas vermelhas
-    cv2.line(imgCenaOriginal, tuple(p2fRectPoints[1]), tuple(p2fRectPoints[2]), ESCALA_VERMELHO, 2)
-    cv2.line(imgCenaOriginal, tuple(p2fRectPoints[2]), tuple(p2fRectPoints[3]), ESCALA_VERMELHO, 2)
-    cv2.line(imgCenaOriginal, tuple(p2fRectPoints[3]), tuple(p2fRectPoints[0]), ESCALA_VERMELHO, 2)
+    cv2.line(
+        imgCenaOriginal,
+        tuple(map(int, p2fRectPoints[0])),
+        tuple(map(int, p2fRectPoints[1])),
+        ESCALA_VERMELHO,
+        2
+    )
 
+    cv2.line(
+        imgCenaOriginal,
+        tuple(map(int, p2fRectPoints[1])),
+        tuple(map(int, p2fRectPoints[2])),
+        ESCALA_VERMELHO,
+        2
+    )
+
+    cv2.line(
+        imgCenaOriginal,
+        tuple(map(int, p2fRectPoints[2])),
+        tuple(map(int, p2fRectPoints[3])),
+        ESCALA_VERMELHO,
+        2
+    )
+
+    cv2.line(
+        imgCenaOriginal,
+        tuple(map(int, p2fRectPoints[3])),
+        tuple(map(int, p2fRectPoints[0])),
+        ESCALA_VERMELHO,
+        2
+    )
 
 # end function
 
