@@ -89,11 +89,17 @@ def selecionarImagem():
 
 
 #processar_imagem
+#processar_imagem
 def processarImagem(caminhoImagem):
 
     cv2.destroyAllWindows()
 
-    imgCenaOriginal = cv2.imread(caminhoImagem)
+    #ler_imagem
+    try:
+        dados = np.fromfile(caminhoImagem, dtype=np.uint8)
+        imgCenaOriginal = cv2.imdecode(dados, cv2.IMREAD_COLOR)
+    except Exception:
+        imgCenaOriginal = None
 
     if imgCenaOriginal is None:
 
