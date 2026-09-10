@@ -1,14 +1,18 @@
 # Main.py
 # -*- coding: utf-8 -*-
+
 import cv2
 import numpy as np
 import os
+import random
+import tkinter as tk
+from tkinter import filedialog
 
 import DetectarCaracteres
 import DetectarPlacas
-import PossivelPlaca
 
-# variáveis de nível de módulo ##########################################################################
+
+#cores
 ESCALA_PRETO = (0.0, 0.0, 0.0)
 ESCALA_BRANCO = (255.0, 255.0, 255.0)
 ESCALA_AMARELO = (0.0, 255.0, 255.0)
@@ -18,211 +22,373 @@ ESCALA_VERMELHO = (0.0, 0.0, 255.0)
 mostrarPassos = False
 
 
-###################################################################################################
-def main():
-    blnKNNTrainingSuccessful = DetectarCaracteres.loadKNNDataAndTrainKNN()
-    # tentativa KNN(o vizinho mais proximo, algoritmo) training
+#listar_imagens
+def listarImagens():
 
-    if blnKNNTrainingSuccessful == False:
-        # se KNN(o vizinho mais proximo, algoritmo) training não foi bem sucedida
-        print ("\nerror: KNN traning was not successful\n")
-        # mostrar mensagem de erro
-        return
-        # e fechar programa
-    # end if
+    pasta = "imagens"
 
-    imgCenaOriginal = cv2.imread("imagens/5.png")
-    # abrir imagem
+    extensoes = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+
+    if not os.path.exists(pasta):
+        return []
+
+    imagens = []
+
+    for arquivo in os.listdir(pasta):
+
+        if arquivo.lower().endswith(extensoes):
+            imagens.append(os.path.join(pasta, arquivo))
+
+    return imagens
+
+
+#imagem_aleatoria
+def escolherImagemAleatoria(imagemAtual=None):
+
+    imagens = listarImagens()
+
+    if len(imagens) == 0:
+        return None
+
+    #evitar_repeticao
+    if imagemAtual is not None and len(imagens) > 1:
+
+        imagensDisponiveis = [
+            imagem for imagem in imagens
+            if imagem != imagemAtual
+        ]
+
+        return random.choice(imagensDisponiveis)
+
+    return random.choice(imagens)
+
+
+#selecionar_imagem
+def selecionarImagem():
+
+    root = tk.Tk()
+
+    root.withdraw()
+
+    root.attributes("-topmost", True)
+
+    caminho = filedialog.askopenfilename(
+        title="Escolha uma imagem",
+        filetypes=[
+            ("Imagens", "*.jpg *.jpeg *.png *.bmp *.webp"),
+            ("Todos os arquivos", "*.*")
+        ]
+    )
+
+    root.destroy()
+
+    if caminho == "":
+        return None
+
+    return caminho
+
+
+#processar_imagem
+def processarImagem(caminhoImagem):
+
+    cv2.destroyAllWindows()
+
+    imgCenaOriginal = cv2.imread(caminhoImagem)
 
     if imgCenaOriginal is None:
-        # se a imagem não foi lida com sucesso
-        print ("\nErro: Arquivo de imagem não lido\n\n")
-        # exibir mensagem de erro de impressão
-        os.system("pause")
-        # pausar assim que o usuário puder ver a mensagem de erro
-        return
-        # e fechar programa
-    # end if
 
-    listaDePossiveisPlacas = DetectarPlacas.DetectarPlacasInScene(imgCenaOriginal)
-    # detectar Placas
+        print("\nErro: Arquivo de imagem não lido\n")
 
-    listaDePossiveisPlacas = DetectarCaracteres.DetectarCaracteresNasPlacas(listaDePossiveisPlacas)
-    # detectar caracteres nas Placas
+        return False
 
-    cv2.imshow("imgCenaOriginal", imgCenaOriginal)
-    # exibir imagem que foi escolhida cv2.imread("imagens/f15.jpg")
+    print("\n----------------------------------------")
+    print("Imagem:", os.path.basename(caminhoImagem))
+    print("----------------------------------------")
+
+    #detectar_placas
+    listaDePossiveisPlacas = DetectarPlacas.DetectarPlacasInScene(
+        imgCenaOriginal
+    )
+
+    #detectar_caracteres
+    listaDePossiveisPlacas = DetectarCaracteres.DetectarCaracteresNasPlacas(
+        listaDePossiveisPlacas
+    )
 
     if len(listaDePossiveisPlacas) == 0:
-        # se não foram encontradas Placas
-        print ("\nNenhuma placa foi encontrada\n")
-        # informar ao usuário que a placa não foi encontrada
+
+        print("\nNenhuma placa foi encontrada\n")
+
     else:
-        # else
 
-        # Se entrar aqui lista de possíveis Placas tem pelo menos uma Placa
+        #ordenar_placas
+        listaDePossiveisPlacas.sort(
+            key=lambda possivelPlaca: len(possivelPlaca.strCaracteres),
+            reverse=True
+        )
 
-        # Classificar a lista de possíveis Placas em ordem decrescente (maior número de caracteres para o menos número de caracteres)
-        listaDePossiveisPlacas.sort(key=lambda possivelPlaca: len(possivelPlaca.strCaracteres), reverse=True)
-
-        # Suponha que o local com os caracteres mais reconhecidos é a placa real
         licPlaca = listaDePossiveisPlacas[0]
 
-        cv2.imshow("imgPlaca", licPlaca.imgPlaca)
-        # mostrar corte do lugar e limite de Placa
-        cv2.imshow("imgThreshold", licPlaca.imgThreshold)
+        if licPlaca.imgPlaca is not None:
+            cv2.imshow("Placa detectada", licPlaca.imgPlaca)
+
+        if licPlaca.imgThreshold is not None:
+            cv2.imshow("Threshold", licPlaca.imgThreshold)
 
         if len(licPlaca.strCaracteres) == 0:
-            # Se nenhum caractere foi encontrado na Placa
-            print ("\nNenhum caractere foi encontrado\n\n")
-            # mostrar mensagem
-            return
-            # e fechar programa
-        # end if
 
-        desenharRetanguloVermelhoAoRedorDaPlaca(imgCenaOriginal, licPlaca)
-        # desenhar um retângulo vermelho em torno de Placa
+            print("\nNenhum caractere foi encontrado\n")
 
-        print ("\nPlaca lida da imagem = " + licPlaca.strCaracteres + "\n")
-        # escrever o texto da placa para std out
-        print ("----------------------------------------")
+        else:
 
-        escreverCaracteresDaPlacaNaImagem(imgCenaOriginal, licPlaca)
-        # escrever o texto da placa na imagem
+            desenharRetanguloVermelhoAoRedorDaPlaca(
+                imgCenaOriginal,
+                licPlaca
+            )
 
-        cv2.imshow("imgCenaOriginal", imgCenaOriginal)
-        #exibir de novo a imagem, só que alterada. com as inserções
+            print(
+                "\nPlaca lida da imagem = "
+                + licPlaca.strCaracteres
+                + "\n"
+            )
 
-        cv2.imwrite("imgCenaOriginal.png", imgCenaOriginal)
-        # gravar essa imagem alterada para o arquivo
+            escreverCaracteresDaPlacaNaImagem(
+                imgCenaOriginal,
+                licPlaca
+            )
 
-    # end if else
+            #salvar_resultado
+            cv2.imwrite(
+                "imgCenaOriginal.png",
+                imgCenaOriginal
+            )
 
-    cv2.waitKey(0)
-    # mantenha as janelas abertas até que o usuário pressiona uma tecla
+    #instrucoes
+    cv2.putText(
+        imgCenaOriginal,
+        "N: aleatoria | A: escolher imagem | Q/ESC: sair",
+        (20, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        ESCALA_VERDE,
+        2
+    )
 
-    return
+    cv2.imshow(
+        "Reconhecimento de Placa",
+        imgCenaOriginal
+    )
+
+    return True
 
 
-# end main
+#programa_principal
+def main():
 
-###################################################################################################
-def desenharRetanguloVermelhoAoRedorDaPlaca(imgCenaOriginal, licPlaca):
-    p2fRectPoints = cv2.boxPoints(licPlaca.rrLocationOfPlacaInScene)
-    # obter 4 vértices do retângulo girado
+    #treinar_knn
+    blnKNNTrainingSuccessful = (
+        DetectarCaracteres.loadKNNDataAndTrainKNN()
+    )
+
+    if blnKNNTrainingSuccessful == False:
+
+        print(
+            "\nErro: treinamento KNN não foi realizado com sucesso\n"
+        )
+
+        return
+
+    imagens = listarImagens()
+
+    if len(imagens) == 0:
+
+        print(
+            "\nErro: nenhuma imagem encontrada na pasta 'imagens'\n"
+        )
+
+        return
+
+    #primeira_imagem
+    imagemAtual = escolherImagemAleatoria()
+
+    print("\nSistema de Reconhecimento de Placas")
+    print("----------------------------------------")
+    print("N - Nova imagem aleatória")
+    print("A - Abrir imagem do computador")
+    print("Q - Sair")
+    print("ESC - Sair")
+    print("----------------------------------------")
+
+    processarImagem(imagemAtual)
+
+    #loop_principal
+    while True:
+
+        tecla = cv2.waitKey(0) & 0xFF
+
+        #nova_aleatoria
+        if tecla == ord("n") or tecla == ord("N"):
+
+            novaImagem = escolherImagemAleatoria(imagemAtual)
+
+            if novaImagem is not None:
+
+                imagemAtual = novaImagem
+
+                processarImagem(imagemAtual)
+
+        #abrir_imagem
+        elif tecla == ord("a") or tecla == ord("A"):
+
+            novaImagem = selecionarImagem()
+
+            if novaImagem is not None:
+
+                imagemAtual = novaImagem
+
+                processarImagem(imagemAtual)
+
+        #sair
+        elif tecla == ord("q") or tecla == ord("Q") or tecla == 27:
+
+            break
+
+    cv2.destroyAllWindows()
+
+
+#desenhar_retangulo
+def desenharRetanguloVermelhoAoRedorDaPlaca(
+        imgCenaOriginal,
+        licPlaca):
+
+    p2fRectPoints = cv2.boxPoints(
+        licPlaca.rrLocationOfPlacaInScene
+    )
+
+    #converter_coordenadas
+    p2fRectPoints = np.int32(p2fRectPoints)
 
     cv2.line(
         imgCenaOriginal,
-        tuple(map(int, p2fRectPoints[0])),
-        tuple(map(int, p2fRectPoints[1])),
+        tuple(p2fRectPoints[0]),
+        tuple(p2fRectPoints[1]),
         ESCALA_VERMELHO,
         2
     )
 
     cv2.line(
         imgCenaOriginal,
-        tuple(map(int, p2fRectPoints[1])),
-        tuple(map(int, p2fRectPoints[2])),
+        tuple(p2fRectPoints[1]),
+        tuple(p2fRectPoints[2]),
         ESCALA_VERMELHO,
         2
     )
 
     cv2.line(
         imgCenaOriginal,
-        tuple(map(int, p2fRectPoints[2])),
-        tuple(map(int, p2fRectPoints[3])),
+        tuple(p2fRectPoints[2]),
+        tuple(p2fRectPoints[3]),
         ESCALA_VERMELHO,
         2
     )
 
     cv2.line(
         imgCenaOriginal,
-        tuple(map(int, p2fRectPoints[3])),
-        tuple(map(int, p2fRectPoints[0])),
+        tuple(p2fRectPoints[3]),
+        tuple(p2fRectPoints[0]),
         ESCALA_VERMELHO,
         2
     )
 
-# end function
 
-###################################################################################################
-def escreverCaracteresDaPlacaNaImagem(imgCenaOriginal, licPlaca):
+#escrever_caracteres
+def escreverCaracteresDaPlacaNaImagem(
+        imgCenaOriginal,
+        licPlaca):
+
     ptCenterOfTextAreaX = 0
-    # este será o centro da área o texto será escrito para
     ptCenterOfTextAreaY = 0
 
     ptLowerLeftTextOriginX = 0
-    # este será o canto inferior esquerdo da área que o texto será escrito para
     ptLowerLeftTextOriginY = 0
 
-    sceneHeight, sceneWidth, sceneNumChannels = imgCenaOriginal.shape
-    PlacaHeight, PlacaWidth, PlacaNumChannels = licPlaca.imgPlaca.shape
+    sceneHeight, sceneWidth, sceneNumChannels = (
+        imgCenaOriginal.shape
+    )
+
+    PlacaHeight, PlacaWidth, PlacaNumChannels = (
+        licPlaca.imgPlaca.shape
+    )
 
     intFontFace = cv2.FONT_HERSHEY_SIMPLEX
-    # escolher uma fonte para os caracteres
+
     fltFontScale = float(PlacaHeight) / 30.0
-    # escala fonte base na altura da área da placa
-    intFontThickness = int(round(fltFontScale * 1.5))
-    # espessura da fonte base na escala de fonte
 
-    textSize, baseline = cv2.getTextSize(licPlaca.strCaracteres, intFontFace, fltFontScale, intFontThickness)
-    # chamar setTextSize
+    intFontThickness = int(
+        round(fltFontScale * 1.5)
+    )
 
-    # descompactar retângulo girado em ponto central, Largura e altura e ângulo
-    ((intPlacaCenterX, intPlacaCenterY), (intPlacaWidth, intPlacaHeight),
-     fltCorrectionAngleInDeg) = licPlaca.rrLocationOfPlacaInScene
+    textSize, baseline = cv2.getTextSize(
+        licPlaca.strCaracteres,
+        intFontFace,
+        fltFontScale,
+        intFontThickness
+    )
+
+    (
+        (intPlacaCenterX, intPlacaCenterY),
+        (intPlacaWidth, intPlacaHeight),
+        fltCorrectionAngleInDeg
+    ) = licPlaca.rrLocationOfPlacaInScene
 
     intPlacaCenterX = int(intPlacaCenterX)
-    # certifique-se o centro é um inteiro
     intPlacaCenterY = int(intPlacaCenterY)
 
-    ptCenterOfTextAreaX = int(intPlacaCenterX)
-    # a localização horizontal da área de texto é o mesmo que a Placa
+    ptCenterOfTextAreaX = int(
+        intPlacaCenterX
+    )
 
+    #posicao_texto
     if intPlacaCenterY < (sceneHeight * 0.75):
-        # se a placa é na parte superior 3/4(tambem conhecido como 0,75) da imagem
-        ptCenterOfTextAreaY = int(round(intPlacaCenterY)) + int(round(PlacaHeight * 1.6))
-        # escrever os caracteres em baixo da Placa
+
+        ptCenterOfTextAreaY = (
+            int(round(intPlacaCenterY))
+            + int(round(PlacaHeight * 1.6))
+        )
+
     else:
-        # senão se a placa é na parte inferior 1/4(tambem conhecido como 0,25) da imagem
-        ptCenterOfTextAreaY = int(round(intPlacaCenterY)) - int(round(PlacaHeight * 1.6))
-        # escrever os caracteres em cima da Placa
-    # end if
+
+        ptCenterOfTextAreaY = (
+            int(round(intPlacaCenterY))
+            - int(round(PlacaHeight * 1.6))
+        )
 
     textSizeWidth, textSizeHeight = textSize
-    # tamanho do texto descompactar Largura e altura
 
-    ptLowerLeftTextOriginX = int(ptCenterOfTextAreaX - (textSizeWidth / 2))
-    # calcular a origem inferior esquerda da área de texto
-    ptLowerLeftTextOriginY = int(ptCenterOfTextAreaY + (textSizeHeight / 2))
-    # com base no centro textarea, Largura, e Altura
+    ptLowerLeftTextOriginX = int(
+        ptCenterOfTextAreaX
+        - (textSizeWidth / 2)
+    )
 
-    # escreva o texto na imagem
-    cv2.putText(imgCenaOriginal, licPlaca.strCaracteres, (ptLowerLeftTextOriginX, ptLowerLeftTextOriginY), intFontFace,
-                fltFontScale, ESCALA_AMARELO, intFontThickness)
+    ptLowerLeftTextOriginY = int(
+        ptCenterOfTextAreaY
+        + (textSizeHeight / 2)
+    )
+
+    cv2.putText(
+        imgCenaOriginal,
+        licPlaca.strCaracteres,
+        (
+            ptLowerLeftTextOriginX,
+            ptLowerLeftTextOriginY
+        ),
+        intFontFace,
+        fltFontScale,
+        ESCALA_AMARELO,
+        intFontThickness
+    )
 
 
-# end function
-
-###################################################################################################
+#iniciar_programa
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
