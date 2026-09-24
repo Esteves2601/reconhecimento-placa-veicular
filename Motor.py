@@ -152,7 +152,7 @@ _MODELOS = ("craft_mlt_25k.pth", "latin_g2.pth")
 VALIDOS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 KW = dict(allowlist=VALIDOS, contrast_ths=0.15, adjust_contrast=0.7,
           text_threshold=0.6, low_text=0.35, link_threshold=0.3,
-          mag_ratio=1.2)
+          mag_ratio=1.0)
 
 
 def _pasta_modelos():
