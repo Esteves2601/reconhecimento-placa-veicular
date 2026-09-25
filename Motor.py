@@ -559,3 +559,71 @@ def detectar(img_bgr, regiao="auto", debug=False):
                     "analise": melhor.imgThreshold,
                     "rotulo": "", "fonte": "", "detalhe": "mais votada"}
     return vazio()
+
+
+LIMIAR_NORMAL = 55
+LIMIAR_RIGOROSO = 80
+
+
+def _diff(a, b):
+    if not a or not b or len(a) != len(b):
+        return 999
+    return sum(1 for x, y in zip(a, b) if x != y)
+
+
+def original_rapido(img):
+    """So o pipeline original (KNN), sem validacao. Retorna texto ou ''."""
+    try:
+        ps = DetectarPlacas.DetectarPlacasInScene(img.copy())
+        ps = DetectarCaracteres.DetectarCaracteresNasPlacas(ps)
+        if not ps:
+            return ""
+        ps.sort(key=lambda p: len(p.strCaracteres), reverse=True)
+        return normalizar(ps[0].strCaracteres or "")
+    except Exception:
+        return ""
+
+
+def fundir(res, orig, rigoroso=False):
+    """Porteira de certeza 0-100. So exibe se >= limiar."""
+    placa = res.get("placa") or ""
+    rotulo = res.get("rotulo") or ""
+    pontos, motivos = 0, []
+    if rotulo.split(" ·")[0] in ("Brasil", "Argentina", "Uruguai",
+                                 "Paraguai"):
+        pontos += 45
+        motivos.append("padrão regional")
+    elif rotulo:
+        pontos += 30
+        motivos.append("padrão aceito")
+    if placa and orig:
+        if placa == orig:
+            pontos += 35
+            motivos.append("original confirma exato")
+        elif _diff(placa, orig) <= 2:
+            pontos += 15
+            motivos.append("original quase igual")
+    pontos += 10
+    motivos.append("leitura concluída")
+    limiar = LIMIAR_RIGOROSO if rigoroso else LIMIAR_NORMAL
+    nivel = ("alta" if pontos >= 75
+             else "média" if pontos >= limiar else "baixa")
+    saida = dict(res)
+    saida.update({"placa": placa if (placa and pontos >= limiar) else "",
+                  "certeza": pontos, "nivel": nivel, "limiar": limiar,
+                  "motivos": motivos, "original": orig})
+    return saida
+
+
+def combinar(img, regiao="auto", rigoroso=False):
+    """Roda original (paralelo) + motor completo e funde com certeza."""
+    orig = {}
+
+    def _o():
+        orig["t"] = original_rapido(img)
+
+    th = threading.Thread(target=_o, daemon=True)
+    th.start()
+    res = detectar(img, regiao)
+    th.join(timeout=10)
+    return fundir(res, orig.get("t", ""), rigoroso)
