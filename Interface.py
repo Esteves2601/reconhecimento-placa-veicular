@@ -195,7 +195,16 @@ class App(ctk.CTk):
             dropdown_fg_color=CARD, text_color=TEXT,
             corner_radius=10, height=36)
         self.opcao_regiao.set("Automática")
-        self.opcao_regiao.pack(fill="x", padx=10, pady=(2, 12))
+        self.opcao_regiao.pack(fill="x", padx=10, pady=(2, 6))
+        ctk.CTkLabel(reg_frame, text="EXIGÊNCIA", font=FONT_SEC,
+                     text_color=MUTED).pack(pady=(6, 2))
+        self.opcao_rigor = ctk.CTkSegmentedButton(
+            reg_frame, values=["Normal", "Rigoroso"],
+            fg_color=PANEL, selected_color=RED,
+            selected_hover_color=RED_HOVER, unselected_color=PANEL,
+            unselected_hover_color="#2a2a30", text_color=MUTED)
+        self.opcao_rigor.set("Normal")
+        self.opcao_rigor.pack(fill="x", padx=10, pady=(2, 12))
 
         direita = ctk.CTkFrame(corpo, fg_color=PANEL, corner_radius=16,
                                border_width=1, border_color=LINE)
@@ -290,34 +299,43 @@ class App(ctk.CTk):
                 rotulo.configure(image=foto, text="")
                 rotulo.image = foto
 
+    def rigoroso(self):
+        try:
+            return self.opcao_rigor.get() == "Rigoroso"
+        except Exception:
+            return False
+
     def mostrar_resultado(self, res):
         placa = res.get("placa") or ""
         if res.get("anotada") is not None:
             self.mostrar(res["anotada"])
         self.mostrar_detalhes(res.get("recorte"), res.get("analise"))
         rotulo = res.get("rotulo") or ""
-        if rotulo:
-            placa_ok, corrigida = placa, False
-        else:
+        if not rotulo and placa:
             bruta = Motor.normalizar(placa)
-            placa_ok, corrigida, rotulo = Motor.interpretar(
-                bruta, self.regiao())
+            _, _, rotulo = Motor.interpretar(bruta, self.regiao())
         como = {"ia": "lida por IA", "knn": "lida por KNN",
                 "ia-cena": "lida por IA (cena)",
                 "consenso": "consenso das leituras"}.get(
                     res.get("fonte") or "", "")
         como = f" ({como})" if como else ""
         det = f" [{res['detalhe']}]" if res.get("detalhe") else ""
-        if placa_ok:
-            self.lbl_placa.configure(text=placa_ok)
-            extra = " (auto-corrigida)" if corrigida else ""
-            self.logar(f"Placa: {placa_ok} [{rotulo}]{extra}{como}{det}")
-        elif bruta:
-            self.lbl_placa.configure(text=bruta)
-            self.logar(f"Leitura bruta: {bruta} (fora do padrão).{como}{det}")
+        if "certeza" in res:
+            niv = f" ✓ {res['nivel']} {res['certeza']}%"
+            mot = f" ({', '.join(res.get('motivos', []))})"
+        else:
+            niv, mot = "", ""
+        if placa:
+            self.lbl_placa.configure(text=placa)
+            self.logar(f"Placa: {placa} [{rotulo}]{como}{det}{niv}{mot}")
         else:
             self.lbl_placa.configure(text="NÃO ENCONTRADA")
-            self.logar("Nenhuma placa reconhecida nesta imagem.")
+            if "certeza" in res:
+                self.logar(f"Inconclusiva ({res['certeza']}% "
+                           f"< {res.get('limiar', 55)}%){mot}."
+                           f"{como}{det}")
+            else:
+                self.logar("Nenhuma placa reconhecida nesta imagem.")
 
     def treinar(self):
         ok = Motor.treinar()
@@ -386,7 +404,7 @@ class App(ctk.CTk):
         import time as _tempo
         t0 = _tempo.perf_counter()
         try:
-            res = Motor.detectar(img, self.regiao())
+            res = Motor.combinar(img, self.regiao(), self.rigoroso())
             dt = _tempo.perf_counter() - t0
             self.after(0, lambda: (
                 self.mostrar_resultado(res),
@@ -491,6 +509,7 @@ class App(ctk.CTk):
                 urls.extend(resto)
                 break
         reg = self.regiao()
+        rig = self.rigoroso()
         primeira = None
         for i, url in enumerate(urls, 1):
             dom = self._dominio(url)
@@ -503,9 +522,8 @@ class App(ctk.CTk):
                     continue
                 if primeira is None:
                     primeira = {"url": url, "img": img}
-                res = Motor.detectar(img.copy(), reg)
-                placa = Motor.normalizar(res["placa"])
-                if res["rotulo"] or Motor.valida(placa, reg):
+                res = Motor.combinar(img.copy(), reg, rig)
+                if res["placa"]:
                     self.after(
                         0, lambda url=url, res=res: self._busca_ok(
                             url, res))
@@ -540,7 +558,7 @@ class App(ctk.CTk):
             self.after(0, lambda: self._busca_fim(f"Falha: {e}"))
             return
         try:
-            res = Motor.detectar(img.copy(), self.regiao())
+            res = Motor.combinar(img.copy(), self.regiao(), self.rigoroso())
         except Exception as e:
             self.after(0, lambda: self._busca_fim(f"Falha: {e}"))
             return
