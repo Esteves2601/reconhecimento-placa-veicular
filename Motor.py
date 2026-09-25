@@ -18,11 +18,11 @@ import threading
 import cv2
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageFont
 
 import Main as legacy
 import DetectarPlacas
 import DetectarCaracteres
+import Preprocesso
 
 # --------------------------------------------------------------------------
 # Regioes e formatos (carros e motos compartilham o padrao em cada pais)
@@ -268,65 +268,76 @@ def _ordenar(saidas):
     return saidas
 
 
-FONTES_RENDER = ["DejaVuSansCondensed-Bold.ttf", "arialbd.ttf",
-                 "bahnschrift.ttf"]
-
-
-def prova_render(crop_bgr, texto):
-    """Correlacao do recorte com o texto renderizado (3 fontes, max).
-
-    Retorna NCC maximo (maior = mais parecido). Barato (~30ms/fonte).
-    """
-    texto = (texto or "").strip()
-    if not texto or crop_bgr is None:
-        return -1.0
-    try:
-        h, w = crop_bgr.shape[:2]
-        cinza = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
-    except Exception:
-        return -1.0
-    claro = float(np.mean(cinza)) > 127.0
-    cor_fundo, cor_texto = (255, 0) if claro else (0, 255)
-    melhor = -1.0
-    for nome_fonte in FONTES_RENDER:
-        try:
-            img = Image.new("L", (w, h), cor_fundo)
-            d = ImageDraw.Draw(img)
-            fonte = None
-            for tam in range(8, 300, 4):
-                try:
-                    f = ImageFont.truetype(nome_fonte, tam)
-                except Exception:
-                    break
-                bb = d.textbbox((0, 0), texto, font=f)
-                if bb[3] - bb[1] > h * 0.72 or bb[2] - bb[0] > w * 0.92:
-                    break
-                fonte = f
-            if fonte is None:
-                continue
-            bb = d.textbbox((0, 0), texto, font=fonte)
-            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            d.text(((w - tw) / 2 - bb[0], (h - th) / 2 - bb[1]), texto,
-                   font=fonte, fill=cor_texto)
-            rend = np.asarray(img, dtype=np.float32)
-            tw2, th2 = max(8, int(w * 0.92)), max(8, int(h * 0.92))
-            tpl = cv2.resize(rend, (tw2, th2))
-            res = cv2.matchTemplate(cinza.astype(np.float32), tpl,
-                                    cv2.TM_CCOEFF_NORMED)
-            valor = float(res.max())
-            if valor > melhor:
-                melhor = valor
-        except Exception:
-            continue
-    return melhor
-
-
 def treinar():
-    """Treina o KNN do sistema original. Retorna True/False."""
+    """Treina o KNN do sistema original (+ base ampla, sem falhar)."""
     try:
-        return bool(DetectarCaracteres.loadKNNDataAndTrainKNN())
+        ok = bool(DetectarCaracteres.loadKNNDataAndTrainKNN())
     except Exception:
+        ok = False
+    carregar_amplo()
+    return ok
+
+
+knn_amplo = None
+
+
+def carregar_amplo():
+    """Carrega a base ampla (16k, 36 classes) num KNN proprio."""
+    global knn_amplo
+    if knn_amplo is not None:
+        return True
+    try:
+        pasta = os.path.dirname(os.path.abspath(__file__))
+        X = np.load(os.path.join(pasta, "base_kNN_ampla.npy"))
+        y = np.load(os.path.join(pasta, "classes_kNN_ampla.npy"))
+        knn_amplo = cv2.ml.KNearest_create()
+        knn_amplo.train(np.float32(X), cv2.ml.ROW_SAMPLE,
+                        np.float32(y).reshape(-1, 1))
+        return True
+    except Exception as e:
+        print(f"Aviso: base ampla indisponivel ({e}).")
+        knn_amplo = None
         return False
+
+
+def ler_knn_amplo(crop):
+    """Le o recorte com a base ampla, k=7 por caractere. Retorna texto."""
+    if crop is None or knn_amplo is None:
+        return ""
+    try:
+        cinza, limiar = Preprocesso.Preprocesso(crop)
+        caixas = DetectarCaracteres.encontrarPossivelCaractereNaPlaca(
+            cinza, limiar)
+        caixas = DetectarCaracteres.removerSobreposicaoDeCaracteres(caixas)
+        caixas.sort(key=lambda c: c.intCenterX)
+        letras = []
+        for cx in caixas:
+            roi = limiar[cx.intBoundingRectY:
+                         cx.intBoundingRectY + cx.intBoundingRectHeight,
+                         cx.intBoundingRectX:
+                         cx.intBoundingRectX + cx.intBoundingRectWidth]
+            if roi.size == 0:
+                continue
+            roi_r = cv2.resize(roi, (20, 30))
+            arr = np.float32(roi_r.reshape(1, -1))
+            _r, _n, resp, _d = knn_amplo.findNearest(arr, k=7)
+            alvos = [str(chr(int(v))) for v in list(resp[0])
+                     if str(chr(int(v))).isalnum()]
+            if not alvos:
+                continue
+            melhor, melhor_n = alvos[0], 0
+            vistos = set()
+            for v in alvos:  # maioria; empate: o mais proximo vence
+                if v in vistos:
+                    continue
+                vistos.add(v)
+                n = alvos.count(v)
+                if n > melhor_n:
+                    melhor, melhor_n = v, n
+            letras.append(melhor)
+        return "".join(letras)
+    except Exception:
+        return ""
 
 
 # --------------------------------------------------------------------------
@@ -441,7 +452,17 @@ def _acordo(textos, consenso):
 
 def detectar(img_bgr, regiao="auto", debug=False):
     """Retorna dict(placa, anotada, recorte, analise, rotulo, fonte,
-    detalhe). Teto de ~14 s."""
+    detalhe). Teto de ~14 s.
+
+    ARVORE DE DECISAO (nesta ordem, primeira regra que vence decide):
+    R1. leitura com padrao regional valido -> exibe;
+    R2. troca 1<->I/0<->O de leitura com padrao regional -> exibe;
+    R3. voto exato mais votado com padrao regional -> exibe;
+    R4. consenso posicional com acordo -> exibe (regional ou generica);
+    R5. KNN amplo (base 16k, k=7) com padrao regional + corroboração;
+    R6. generica IA com confianca, ou troca corroborada -> exibe;
+    R7. sem evidencia: retém (placa "") em vez de exibir lixo.
+    Leitores: IA neural, KNN original (k=1), KNN amplo (k=7)."""
     import time as _tempo
     inicio = _tempo.perf_counter()
 
@@ -568,10 +589,35 @@ def detectar(img_bgr, regiao="auto", debug=False):
                     return achou
             if estouro():
                 break
+            # FASE 2b: KNN amplo (base 16k, k=5) no recorte.
+            # Lixo do amplo as vezes casa padrao regional por sorte;
+            # por isso vitoria (direta ou troca) exige corroboração:
+            # IA ou KNN legado ja leram o mesmo texto.
+            if (knn_amplo is not None
+                    and cand.imgPlaca is not None):
+                ampla = normalizar(ler_knn_amplo(cand.imgPlaca))
+                if ampla and ampla not in (v[0] for v in votos):
+                    votos.append((ampla, "knn-amplo"))
+                    corroborada = any(t == ampla and f != "knn-amplo"
+                                      for t, f in votos)
+                    if corroborada:
+                        pv, _c, rv = interpretar(ampla, regiao)
+                        if pv:
+                            return finalizar(cand, pv, rv, "knn-amplo",
+                                             "base ampla k=5 corroborada")
+                        achou = tentar_trocas(ampla, cand, "knn-amplo")
+                        if achou:
+                            return achou
         if estouro():
             break
 
+    def _corroborado(texto):
+        fontes = {f for t, f in votos if t == texto}
+        return len(fontes - {"knn-amplo", "render"}) >= 1 and len(fontes) >= 2
+
     for texto, fonte, n in _ranking(votos):
+        if fonte == "knn-amplo" and not _corroborado(texto):
+            continue  # amplo solo nao decide (lixo casa padrao as vezes)
         pv, _c, rv = interpretar(texto, regiao)
         if pv:
             return finalizar(melhor, pv, rv, fonte, f"{n} leitura(s)")
@@ -587,45 +633,10 @@ def detectar(img_bgr, regiao="auto", debug=False):
             votos.append((consenso, "consenso"))
             return finalizar(melhor, gv, grv, "consenso",
                              f"{n_grupo} no grupo")
-    # 2b) prova por render: correlaciona finalistas renderizados com
-    # os pixels. Vence com margem clara (>= 0.015).
-    if (melhor is not None and melhor.imgPlaca is not None
-            and _tempo.perf_counter() < inicio + ORCAMENTO_S + 1.0):
-        cands_r, vistos_r = [], set()
-        for t in sorted(score_ia, key=lambda x: score_ia[x], reverse=True):
-            if t and t not in vistos_r:
-                vistos_r.add(t)
-                cands_r.append(t)
-            if len(cands_r) >= 8:
-                break
-        for t, f in votos:
-            if f == "knn" and t not in vistos_r:
-                vistos_r.add(t)
-                cands_r.append(t)
-            if len(cands_r) >= 10:
-                break
-        notas = []
-        for t in cands_r:
-            if _tempo.perf_counter() > inicio + ORCAMENTO_S + 1.0:
-                break
-            try:
-                notas.append((prova_render(melhor.imgPlaca, t), t))
-            except Exception:
-                continue
-        notas.sort(reverse=True)
-        if len(notas) >= 2 and notas[0][0] - notas[1][0] >= 0.015:
-            top = notas[0][1]
-            pv, _c, rv = interpretar(top, regiao)
-            if pv:
-                return finalizar(melhor, pv, rv, "render",
-                                 f"correlação {notas[0][0]:.3f}")
-            if re.match(r"^[A-Z0-9]{4,8}$", top):
-                return finalizar(melhor, top,
-                                 "Internacional · genérica (render)",
-                                 "render",
-                                 f"correlação {notas[0][0]:.3f}")
     if melhor is None:
         return vazio()
+    # corroboracao: so IA direta e KNN legado; o amplo confirma
+    # via exato/consenso/render, nunca sozinho no generico
     knn_set = {t for t, f in votos if f == "knn"}
     for texto in sorted(score_ia, key=lambda t: score_ia[t], reverse=True):
         gv, grv = aceitar_generica(texto, conf_ia[texto])
@@ -638,7 +649,7 @@ def detectar(img_bgr, regiao="auto", debug=False):
                 if gv:
                     return finalizar(melhor, gv, grv, "ia",
                                      "variação corroborada")
-    if melhor_ia["texto"]:
+    if melhor_ia["texto"] and not tem_ia:
         return {"placa": melhor_ia["texto"], "anotada": img_bgr,
                 "recorte": melhor.imgPlaca, "analise": melhor.imgThreshold,
                 "rotulo": "", "fonte": "", "detalhe": "melhor leitura da IA"}
