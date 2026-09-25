@@ -315,6 +315,7 @@ class App(ctk.CTk):
             bruta = Motor.normalizar(placa)
             _, _, rotulo = Motor.interpretar(bruta, self.regiao())
         como = {"ia": "lida por IA", "knn": "lida por KNN",
+                "knn-amplo": "KNN amplo (k=5)",
                 "ia-cena": "lida por IA (cena)",
                 "render": "prova por render",
                 "consenso": "consenso das leituras"}.get(

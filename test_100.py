@@ -82,9 +82,12 @@ def main():
     linhas = []
     for nome, img, esperado, rep in parte:
         t0 = time.time()
+        fonte, detalhe = "", ""
         try:
             if modo == "motor":
-                obtido = Motor.detectar(img.copy(), "auto")["placa"] or ""
+                r = Motor.detectar(img.copy(), "auto")
+                obtido = r["placa"] or ""
+                fonte, detalhe = r["fonte"], r["detalhe"]
             else:
                 obtido = detectar_original(img.copy())
         except Exception as e:
@@ -94,8 +97,7 @@ def main():
                        "esperado": esperado, "obtido": obtido,
                        "acertou": obtido == esperado, "tempo_s": round(dt, 1)})
         print(f"[{modo} {fatia}] {nome} r{rep}: "
-              f"{esperado!r} x {obtido!r} "
-              f"{'OK' if obtido == esperado else '--'} {dt:.1f}s",
+              f"{esperado!r} x {obtido!r} via={fonte} {detalhe} {dt:.1f}s",
               flush=True)
     modo_arquivo = "w" if fatia == 0 else "a"
     with open(saida_para(modo), modo_arquivo, encoding="utf-8") as f:
