@@ -47,7 +47,10 @@ REGIOES = {
         ("generica", r"^[A-Z0-9]{5,8}$", None),
     ],
 }
-ORDEM_AUTO = ("brasil", "argentina", "uruguai", "paraguai")
+# Auto = padroes brasileiros (uruguai compartilha o antigo). Os padroes
+# curtos de AR/PY (LLLDDD, LLLLDDD) colidem com palavras vanity (RIP151,
+# IZK961...) e so valem com selecao explicita no seletor de regiao.
+ORDEM_AUTO = ("brasil", "uruguai")
 
 DIGITO_PARA_LETRA = {"0": "O", "1": "I", "2": "Z", "4": "A",
                      "5": "S", "6": "G", "8": "B"}
