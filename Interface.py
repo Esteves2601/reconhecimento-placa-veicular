@@ -316,6 +316,7 @@ class App(ctk.CTk):
             _, _, rotulo = Motor.interpretar(bruta, self.regiao())
         como = {"ia": "lida por IA", "knn": "lida por KNN",
                 "ia-cena": "lida por IA (cena)",
+                "render": "prova por render",
                 "consenso": "consenso das leituras"}.get(
                     res.get("fonte") or "", "")
         como = f" ({como})" if como else ""

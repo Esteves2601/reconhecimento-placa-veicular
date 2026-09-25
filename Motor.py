@@ -18,6 +18,7 @@ import threading
 import cv2
 import numpy as np
 import requests
+from PIL import Image, ImageDraw, ImageFont
 
 import Main as legacy
 import DetectarPlacas
@@ -265,6 +266,59 @@ def ler_recorte(crop, aceitar=None, ate_quando=None, rapido=False):
 def _ordenar(saidas):
     saidas.sort(key=lambda t: (t[2] * (0.5 + t[1]), t[1]), reverse=True)
     return saidas
+
+
+FONTES_RENDER = ["DejaVuSansCondensed-Bold.ttf", "arialbd.ttf",
+                 "bahnschrift.ttf"]
+
+
+def prova_render(crop_bgr, texto):
+    """Correlacao do recorte com o texto renderizado (3 fontes, max).
+
+    Retorna NCC maximo (maior = mais parecido). Barato (~30ms/fonte).
+    """
+    texto = (texto or "").strip()
+    if not texto or crop_bgr is None:
+        return -1.0
+    try:
+        h, w = crop_bgr.shape[:2]
+        cinza = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
+    except Exception:
+        return -1.0
+    claro = float(np.mean(cinza)) > 127.0
+    cor_fundo, cor_texto = (255, 0) if claro else (0, 255)
+    melhor = -1.0
+    for nome_fonte in FONTES_RENDER:
+        try:
+            img = Image.new("L", (w, h), cor_fundo)
+            d = ImageDraw.Draw(img)
+            fonte = None
+            for tam in range(8, 300, 4):
+                try:
+                    f = ImageFont.truetype(nome_fonte, tam)
+                except Exception:
+                    break
+                bb = d.textbbox((0, 0), texto, font=f)
+                if bb[3] - bb[1] > h * 0.72 or bb[2] - bb[0] > w * 0.92:
+                    break
+                fonte = f
+            if fonte is None:
+                continue
+            bb = d.textbbox((0, 0), texto, font=fonte)
+            tw, th = bb[2] - bb[0], bb[3] - bb[1]
+            d.text(((w - tw) / 2 - bb[0], (h - th) / 2 - bb[1]), texto,
+                   font=fonte, fill=cor_texto)
+            rend = np.asarray(img, dtype=np.float32)
+            tw2, th2 = max(8, int(w * 0.92)), max(8, int(h * 0.92))
+            tpl = cv2.resize(rend, (tw2, th2))
+            res = cv2.matchTemplate(cinza.astype(np.float32), tpl,
+                                    cv2.TM_CCOEFF_NORMED)
+            valor = float(res.max())
+            if valor > melhor:
+                melhor = valor
+        except Exception:
+            continue
+    return melhor
 
 
 def treinar():
@@ -533,6 +587,43 @@ def detectar(img_bgr, regiao="auto", debug=False):
             votos.append((consenso, "consenso"))
             return finalizar(melhor, gv, grv, "consenso",
                              f"{n_grupo} no grupo")
+    # 2b) prova por render: correlaciona finalistas renderizados com
+    # os pixels. Vence com margem clara (>= 0.015).
+    if (melhor is not None and melhor.imgPlaca is not None
+            and _tempo.perf_counter() < inicio + ORCAMENTO_S + 1.0):
+        cands_r, vistos_r = [], set()
+        for t in sorted(score_ia, key=lambda x: score_ia[x], reverse=True):
+            if t and t not in vistos_r:
+                vistos_r.add(t)
+                cands_r.append(t)
+            if len(cands_r) >= 8:
+                break
+        for t, f in votos:
+            if f == "knn" and t not in vistos_r:
+                vistos_r.add(t)
+                cands_r.append(t)
+            if len(cands_r) >= 10:
+                break
+        notas = []
+        for t in cands_r:
+            if _tempo.perf_counter() > inicio + ORCAMENTO_S + 1.0:
+                break
+            try:
+                notas.append((prova_render(melhor.imgPlaca, t), t))
+            except Exception:
+                continue
+        notas.sort(reverse=True)
+        if len(notas) >= 2 and notas[0][0] - notas[1][0] >= 0.015:
+            top = notas[0][1]
+            pv, _c, rv = interpretar(top, regiao)
+            if pv:
+                return finalizar(melhor, pv, rv, "render",
+                                 f"correlação {notas[0][0]:.3f}")
+            if re.match(r"^[A-Z0-9]{4,8}$", top):
+                return finalizar(melhor, top,
+                                 "Internacional · genérica (render)",
+                                 "render",
+                                 f"correlação {notas[0][0]:.3f}")
     if melhor is None:
         return vazio()
     knn_set = {t for t, f in votos if f == "knn"}
