@@ -1,0 +1,6 @@
+# Dependencias do app (app_gui.py + app_web.py). tkinter vem no Python.
+opencv-python>=4.8
+numpy>=1.24
+Pillow>=10
+requests>=2.31
+Flask>=3.0
