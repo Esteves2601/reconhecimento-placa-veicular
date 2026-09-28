@@ -22,17 +22,41 @@ CARD = "#1b1b1f"
 LINE = "#26262c"
 RED = "#e10600"
 RED_HOVER = "#ff2323"
+RED_DARK = "#8f0400"
 TEXT = "#f4f4f5"
 MUTED = "#9d9da8"
-FONT_TITULO = ("Segoe UI", 18, "bold")
-FONT_SUB = ("Segoe UI", 10)
+GREEN = "#22c55e"
+FONT_TITULO = ("Segoe UI", 19, "bold")
+FONT_SUB = ("Segoe UI", 11)
 FONT_SEC = ("Segoe UI", 11, "bold")
 FONT_BODY = ("Segoe UI", 11)
-FONT_PLATE = ("Consolas", 34, "bold")
+FONT_BTN = ("Segoe UI", 11, "bold")
+FONT_PLATE = ("Consolas", 38, "bold")
 
 REGIOES = {"Automática": "auto", "Brasil": "brasil",
            "Argentina": "argentina", "Uruguai": "uruguai",
            "Paraguai": "paraguai", "Internacional": "internacional"}
+
+
+def aplicar_tema(root):
+    st = ttk.Style(root)
+    try:
+        st.theme_use("clam")
+    except Exception:
+        pass
+    st.configure("TNotebook", background=PANEL, borderwidth=0)
+    st.configure("TNotebook.Tab", background="#1e1e22", foreground=MUTED,
+                 font=("Segoe UI", 11, "bold"), padding=(14, 8))
+    st.map("TNotebook.Tab",
+           background=[("selected", RED)],
+           foreground=[("selected", "white")])
+    st.configure("TCombobox", fieldbackground="#0e0e10",
+                 background=PANEL, foreground=TEXT,
+                 arrowcolor=RED, borderwidth=0)
+    st.configure("TProgressbar", background=RED, troughcolor="#0e0e10",
+                 borderwidth=0, thickness=8)
+    st.configure("TEntry", fieldbackground="#0e0e10", foreground=TEXT)
+    return st
 
 
 def foto_tk(img, max_w=640, max_h=380):
@@ -48,12 +72,45 @@ def foto_tk(img, max_w=640, max_h=380):
     return ImageTk.PhotoImage(Image.fromarray(cv2.resize(rgb, (nw, nh))))
 
 
+class BotaoHover(tk.Button):
+    """Botao flat com hover (vermelho ou grafite)."""
+
+    def __init__(self, pai, vermelho=True, **kw):
+        self._cor = RED if vermelho else "#2a2a30"
+        self._hover = RED_HOVER if vermelho else "#35353c"
+        super().__init__(pai, bg=self._cor, fg="white",
+                         activebackground=self._hover,
+                         activeforeground="white", relief="flat",
+                         font=FONT_BTN, cursor="hand2", pady=9, **kw)
+        self.bind("<Enter>", lambda _e: self.configure(bg=self._hover))
+        self.bind("<Leave>", lambda _e: self.configure(bg=self._cor))
+
+
+class Cartao(tk.Frame):
+    """Quadro escuro com titulo em vermelho e borda sutil."""
+
+    def __init__(self, pai, titulo, **kw):
+        super().__init__(pai, bg=CARD, highlightbackground=LINE,
+                         highlightthickness=1, **kw)
+        tk.Label(self, text=titulo, bg=CARD, fg=RED_HOVER,
+                 font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
+
+
 class App:
     def __init__(self, root):
         self.root = root
         root.title("Reconhecimento de Placas")
-        root.geometry("1120x740")
+        root.geometry("1180x760")
+        root.minsize(1020, 660)
         root.configure(bg=BG)
+        aplicar_tema(root)
+        try:
+            root.update_idletasks()
+            x = (root.winfo_screenwidth() - 1180) // 2
+            y = (root.winfo_screenheight() - 760) // 2
+            root.geometry(f"1180x760+{max(x, 0)}+{max(y, 0)}")
+        except Exception:
+            pass
         try:
             base = os.path.dirname(os.path.abspath(__file__))
             root.iconbitmap(os.path.join(base, "icone_placa.ico"))
@@ -69,25 +126,25 @@ class App:
         self.foto_ref = None
         self.mini_refs = []
 
-        topo = tk.Frame(root, bg=PANEL)
-        topo.pack(fill="x")
-        tk.Frame(topo, bg=RED, height=3).pack(fill="x")
-        marca = tk.Label(topo, text="P", bg=RED, fg="white",
-                         font=("Segoe UI", 20, "bold"), width=2)
+        header = tk.Frame(root, bg=PANEL)
+        header.pack(fill="x")
+        tk.Frame(header, bg=RED, height=3).pack(fill="x")
+        marca = tk.Label(header, text="P", bg=RED, fg="white",
+                         font=("Segoe UI", 22, "bold"), width=2)
         marca.pack(side="left", padx=(18, 12), pady=12)
-        tbox = tk.Frame(topo, bg=PANEL)
-        tbox.pack(side="left", pady=10)
-        tk.Label(tbox, text="RECONHECIMENTO DE PLACAS", bg=PANEL, fg=TEXT,
-                 font=FONT_TITULO).pack(anchor="w")
-        tk.Label(tbox, text="Imagem • Câmera ao vivo • Busca online",
+        textos = tk.Frame(header, bg=PANEL)
+        textos.pack(side="left", pady=10)
+        tk.Label(textos, text="RECONHECIMENTO DE PLACAS",
+                 bg=PANEL, fg=TEXT, font=FONT_TITULO).pack(anchor="w")
+        tk.Label(textos, text="Imagem • Câmera ao vivo • Busca online",
                  bg=PANEL, fg=MUTED, font=FONT_SUB).pack(anchor="w")
-        self.lbl_status = tk.Label(topo, text="● Iniciando…", bg=PANEL,
+        self.lbl_status = tk.Label(header, text="● Iniciando…", bg=PANEL,
                                    fg="#f5a623", font=FONT_BODY)
         self.lbl_status.pack(side="right", padx=18)
 
         corpo = tk.Frame(root, bg=BG)
         corpo.pack(fill="both", expand=True, padx=14, pady=14)
-        lateral = tk.Frame(corpo, bg=PANEL, width=330,
+        lateral = tk.Frame(corpo, bg=PANEL, width=340,
                            highlightbackground=LINE, highlightthickness=1)
         lateral.pack(side="left", fill="y", padx=(0, 14))
         lateral.pack_propagate(False)
@@ -98,29 +155,27 @@ class App:
         self.abas = ttk.Notebook(lateral)
         self.abas.pack(padx=12, pady=12, fill="x")
         for nome in ("Imagem", "Ao vivo", "Buscar carro"):
-            quadro = tk.Frame(self.abas, bg=CARD)
-            self.abas.add(quadro, text=nome)
-        self._aba_imagem(self.abas.nametowidget(self.abas.tabs()[0]))
-        self._aba_camera(self.abas.nametowidget(self.abas.tabs()[1]))
-        self._aba_online(self.abas.nametowidget(self.abas.tabs()[2]))
+            self.abas.add(tk.Frame(self.abas, bg=CARD), text=nome)
+        tabs = self.abas.tabs()
+        self._aba_imagem(self.abas.nametowidget(tabs[0]))
+        self._aba_camera(self.abas.nametowidget(tabs[1]))
+        self._aba_online(self.abas.nametowidget(tabs[2]))
 
-        regf = tk.Frame(lateral, bg=CARD)
+        regf = Cartao(lateral, "REGIÃO DAS PLACAS")
         regf.pack(fill="x", padx=12, pady=(0, 6))
-        tk.Label(regf, text="REGIÃO DAS PLACAS", bg=CARD, fg=RED_HOVER,
-                 font=FONT_SEC).pack(pady=(10, 2))
         self.opcao_regiao = ttk.Combobox(regf, values=list(REGIOES),
-                                         state="readonly", width=28)
+                                         state="readonly", width=26)
         self.opcao_regiao.set("Automática")
         self.opcao_regiao.pack(padx=10, pady=(2, 6))
         tk.Label(regf, text="EXIGÊNCIA", bg=CARD, fg=MUTED,
-                 font=FONT_SEC).pack(pady=(6, 2))
+                 font=("Segoe UI", 10, "bold")).pack(pady=(6, 2))
         self.opcao_rigor = ttk.Combobox(regf, values=["Normal", "Rigoroso"],
-                                        state="readonly", width=28)
+                                        state="readonly", width=26)
         self.opcao_rigor.set("Normal")
         self.opcao_rigor.pack(padx=10, pady=(2, 12))
 
         self.preview = tk.Label(direita, text="Nenhuma imagem\ncarregada",
-                                bg=PANEL, fg=MUTED, font=("Segoe UI", 14))
+                                bg=PANEL, fg=MUTED, font=("Segoe UI", 15))
         self.preview.pack(padx=16, pady=(16, 8), fill="both", expand=True)
 
         minis = tk.Frame(direita, bg=PANEL)
@@ -142,36 +197,30 @@ class App:
                                   justify="left")
         self.lbl_fonte.pack(fill="x", padx=16, pady=(0, 4))
         self.log = tk.Text(direita, height=7, bg="#0e0e11", fg=MUTED,
-                           font=FONT_BODY, relief="flat")
+                           font=FONT_BODY, relief="flat",
+                           highlightthickness=1, highlightbackground=LINE)
         self.log.pack(fill="x", padx=16, pady=(4, 16))
         self.logar("Sistema iniciado. Treinando classificador…")
         threading.Thread(target=self.treinar, daemon=True).start()
         Motor.preparar_ia_async(
             lambda ok: self.root.after(0, lambda: self.logar(
-                "IA neural pronta." if ok else
-                "IA ausente; usando sistema original.")))
+                "IA neural pronta (leitura principal)." if ok else
+                "IA neural ausente; usando sistema original.")))
         root.protocol("WM_DELETE_WINDOW", self.fechar)
 
     # ---------- construção ----------
     def _botao(self, pai, texto, comando, vermelho=True):
-        b = tk.Button(pai, text=texto, command=comando, fg="white",
-                      bg=RED if vermelho else "#2a2a30",
-                      activebackground=RED_HOVER if vermelho else "#35353c",
-                      activeforeground="white", relief="flat",
-                      font=("Segoe UI", 11, "bold"), height=2)
+        b = BotaoHover(pai, text=texto, command=comando, vermelho=vermelho)
         b.pack(fill="x", padx=10, pady=4)
         return b
 
-    def _entrada(self, pai, titulo, placeholder="", secreto=False):
+    def _entrada(self, pai, titulo, secreto=False):
         tk.Label(pai, text=titulo, bg=CARD, fg=MUTED,
                  font=FONT_SEC).pack(anchor="w", padx=10, pady=(8, 0))
-        e = tk.Entry(pai, bg=PANEL, fg=TEXT, insertbackground=TEXT,
+        e = tk.Entry(pai, bg="#0e0e10", fg=TEXT, insertbackground=TEXT,
                      relief="flat", font=FONT_BODY,
-                     show="•" if secreto else "")
-        try:
-            e.insert(0, "")
-        except Exception:
-            pass
+                     show="•" if secreto else "",
+                     highlightthickness=1, highlightbackground=LINE)
         e.pack(fill="x", padx=10, pady=4, ipady=6)
         return e
 
@@ -256,13 +305,14 @@ class App:
         self.mostrar_detalhes(res.get("recorte"), res.get("analise"))
         rotulo = res.get("rotulo") or ""
         if not rotulo and placa:
-            _, _, rotulo = Motor.interpretar(
-                Motor.normalizar(placa), self.regiao())
+            bruta = Motor.normalizar(placa)
+            _, _, rotulo = Motor.interpretar(bruta, self.regiao())
         como = {"ia": "lida por IA", "knn": "lida por KNN",
                 "knn-amplo": "KNN amplo (k=7)",
                 "ia-cena": "lida por IA (cena)",
                 "render": "prova por render",
-                "consenso": "consenso"}.get(res.get("fonte") or "", "")
+                "consenso": "consenso das leituras"}.get(
+                    res.get("fonte") or "", "")
         como = f" ({como})" if como else ""
         det = f" [{res['detalhe']}]" if res.get("detalhe") else ""
         if "certeza" in res:
@@ -470,7 +520,8 @@ class App:
                 res = Motor.combinar(img.copy(), reg, rig)
                 if res["placa"]:
                     self.root.after(
-                        0, lambda url=url, res=res: self._busca_ok(url, res))
+                        0, lambda url=url, res=res: self._busca_ok(
+                            url, res))
                     return
             except Exception:
                 continue
