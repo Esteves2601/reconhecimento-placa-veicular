@@ -1,0 +1,57 @@
+# Gera o APK do placas na nuvem (buildozer nao roda no Windows).
+# - Push com mudanca em mobile_app/** OU botao Run workflow: builda o APK
+#   debug e anexa como Artifact (precisa login no GitHub para baixar).
+# - Run workflow com "Publicar Release" marcado: cria Release com o APK
+#   (download direto no celular, sem login, link HTTPS).
+# O APK debug instala com avisos do Play Protect (certificado debug).
+# O release limpo (keystore proprio) entra depois via Secrets.
+
+name: APK Placas
+
+on:
+  push:
+    paths:
+      - "mobile_app/**"
+      - ".github/workflows/apk.yml"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publicar Release (download direto no celular)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copiar motor para mobile_app
+        run: |
+          cp Motor.py Main.py DetectarPlacas.py DetectarCaracteres.py \
+             Preprocesso.py PossivelPlaca.py PossivelCaractere.py \
+             classifications.txt flattened_images.txt \
+             base_kNN_ampla.npy classes_kNN_ampla.npy mobile_app/
+
+      - name: Build APK debug
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          workdir: mobile_app
+          buildozer_version: stable
+
+      - name: Anexar APK (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: placas-debug
+          path: mobile_app/bin/*.apk
+
+      - name: Publicar Release
+        if: ${{ inputs.release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-debug-${{ github.run_number }}
+          name: Placas debug ${{ github.run_number }}
+          files: mobile_app/bin/*.apk
