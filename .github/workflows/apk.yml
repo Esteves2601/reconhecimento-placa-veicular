@@ -91,8 +91,9 @@ jobs:
                       or "CalledProcessError" in l):
                   blocos += uteis[max(0, i - 2):i + 12]
           chaves = [l for l in uteis
-                    if re.search(r"(Error|Exception|FAILED|"
-                                 r"E: |sdkmanager|BUILD FAILED)", l)
+                    if re.search(r"(Error|error:|Exception|FAILED|"
+                                 r"E: |sdkmanager|BUILD FAILED"
+                                 r"|ninja: build stopped)", l)
                     and "errorlevel" not in l.lower()
                     and "raise" not in l][-15:]
           partes = []

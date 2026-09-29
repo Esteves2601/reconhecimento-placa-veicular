@@ -60,8 +60,11 @@ android.ndk_api = 24
 # Incluir armeabi-v7a dobra o tempo e o disco do build sem beneficio real.
 android.archs = arm64-v8a
 
-# (str) Branch python-for-android (master = toolchain atual)
-p4a.branch = master
+# (str) Branch python-for-android: TRAVADO em release estavel e coerente.
+# O master atual compila numpy v2.3.0 contra Python 3.14 e quebra no C++
+# (unique.cpp). v2024.01.21 = Python <=3.12 + receitas da mesma epoca
+# (numpy/kivy/opencv/pyjnius), NDK 25b e API 34 suportados.
+p4a.branch = v2024.01.21
 
 # Aceita licencas do SDK sem prompt (build nao interativo no Colab)
 android.accept_sdk_license = True
