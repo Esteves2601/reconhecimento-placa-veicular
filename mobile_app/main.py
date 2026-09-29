@@ -164,8 +164,8 @@ class Tela(ScrollView):
         col.add_widget(faixa)
 
         topo = BoxLayout(size_hint_y=None, height=dp(52), spacing=dp(10))
-        selo = Label(text="P", font_size=sp(22), bold=True, color=TEXT,
-                     size_hint_x=None, width=dp(44))
+        selo = Label(text="P", font_size=sp(20), bold=True, color=TEXT,
+                     size_hint_x=None, width=dp(40))
         with selo.canvas.before:
             Color(*RED)
             _s = RoundedRectangle(radius=[dp(10)])
@@ -173,14 +173,14 @@ class Tela(ScrollView):
                       pos=lambda i, v: setattr(_s, "pos", v))
         topo.add_widget(selo)
         topo.add_widget(alinhar(Label(text="RECONHECIMENTO DE PLACAS",
-                                      font_size=sp(17), bold=True, color=RED,
+                                      font_size=sp(15), bold=True, color=RED,
                                       halign="left", valign="middle")))
-        self.status_dot = Label(text="●", font_size=sp(16), color=AMBAR,
-                                size_hint_x=None, width=dp(24))
+        self.status_dot = Label(text="●", font_size=sp(14), color=AMBAR,
+                                size_hint_x=None, width=dp(20))
         topo.add_widget(self.status_dot)
         self.status_txt = alinhar(Label(text="PRONTO", font_size=sp(11),
                                          color=MUTED, size_hint_x=None,
-                                         width=dp(64), halign="left",
+                                         width=dp(52), halign="left",
                                          valign="middle"))
         topo.add_widget(self.status_txt)
         col.add_widget(topo)
@@ -200,9 +200,10 @@ class Tela(ScrollView):
         self.resultado = Label(text="— — —", font_size=sp(40), bold=True,
                                color=TEXT, size_hint_y=None, height=dp(62))
         cartao.add_widget(self.resultado)
-        self.detalhe = Label(text="Escolha uma foto ou fotografe",
-                             font_size=sp(13), color=MUTED,
-                             size_hint_y=None, height=dp(48))
+        self.detalhe = alinhar(Label(text="Escolha uma foto ou fotografe",
+                                     font_size=sp(13), color=MUTED,
+                                     size_hint_y=None, height=dp(48),
+                                     halign="left", valign="top"))
         cartao.add_widget(self.detalhe)
         col.add_widget(cartao)
 
