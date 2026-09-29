@@ -1,8 +1,8 @@
 """App Android do Reconhecimento de Placas (Kivy).
 
 Espelha o visual do desktop (Interface.py: grafite + vermelho), adaptado
-para smartphone: unidades dp/sp, rolagem, cartao de resultado com borda
-vermelha, botoes planos.
+para smartphone: compacto, cantos arredondados, botoes secundarios grafite
+e foto aleatoria inclusa (como no desktop).
 
 Usa o Motor.py ORIGINAL como biblioteca (copias de build, sem alteracoes
 nos arquivos da raiz). Regras herdadas do projeto:
@@ -15,6 +15,7 @@ Android, um stub e registrado em sys.modules ANTES de importar o Motor.
 """
 
 import os
+import random
 import sys
 import threading
 import types
@@ -56,16 +57,21 @@ except Exception:  # desktop sem plyer: botoes de captura desabilitados
     camera = None
     filechooser = None
 
-# Paleta do desktop (Interface.py).
+# Paleta do desktop (Interface.py). Secundario = botoes grafite do desktop.
 BG = get_color_from_hex("#0b0b0d")
 PANEL = get_color_from_hex("#131316")
 CARD = get_color_from_hex("#1b1b1f")
+SEC = get_color_from_hex("#2a2a30")
+SEC_DOWN = get_color_from_hex("#35353c")
 RED = get_color_from_hex("#e10600")
 RED_DARK = get_color_from_hex("#8f0400")
 TEXT = get_color_from_hex("#f4f4f5")
 MUTED = get_color_from_hex("#9d9da8")
 AMBAR = get_color_from_hex("#f5a623")
 VERDE = get_color_from_hex("#22c55e")
+CINZA_OFF = get_color_from_hex("#3a3a42")
+
+PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
@@ -95,14 +101,38 @@ def _placeholder(caminho):
     cv2.imwrite(caminho, img)
 
 
+def _amostras():
+    try:
+        arqs = sorted(
+            os.path.join(PASTA_AMOSTRAS, a) for a in os.listdir(PASTA_AMOSTRAS)
+            if a.lower().endswith((".png", ".jpg", ".jpeg", ".bmp",
+                                   ".webp")))
+    except Exception:
+        arqs = []
+    return [a for a in arqs if os.path.isfile(a)]
+
+
+def alinhar(lbl):
+    """Faz halign/valign valerem (text_size acompanha o widget)."""
+    lbl.bind(size=lambda i, v: setattr(i, "text_size", v))
+    return lbl
+
+
+def rotulo(texto, tamanho=12, cor=MUTED, negrito=False, altura=None):
+    return alinhar(Label(text=texto, font_size=sp(tamanho), color=cor,
+                         bold=negrito, size_hint_y=None,
+                         height=dp(altura or 22), halign="left",
+                         valign="middle"))
+
+
 class Card(BoxLayout):
-    """Cartao escuro com borda (efeito via dois retangulos)."""
+    """Cartao escuro com borda fina (efeito via dois retangulos)."""
 
     def __init__(self, borda=RED, fundo=CARD, raio=None, esp=None,
                  **kwargs):
         super().__init__(**kwargs)
-        raio = dp(12) if raio is None else raio
-        esp = dp(2) if esp is None else esp
+        raio = dp(14) if raio is None else raio
+        esp = dp(1) if esp is None else esp
         self._esp = esp
         with self.canvas.before:
             Color(*borda)
@@ -119,6 +149,35 @@ class Card(BoxLayout):
         self._r2.size = (self.width - 2 * e, self.height - 2 * e)
 
 
+class BotaoArredondado(Button):
+    """Botao plano com cantos arredondados e feedback de toque."""
+
+    def __init__(self, cor=RED, cor_press=None, raio=None, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ""
+        self.background_down = ""
+        self.background_color = (0, 0, 0, 0)
+        self._cor = cor
+        self._cor_press = cor_press or RED_DARK
+        with self.canvas.before:
+            self._tinta = Color(*cor)
+            self._forma = RoundedRectangle(radius=[raio or dp(14)])
+        self.bind(size=self._ajustar, pos=self._ajustar,
+                  state=self._pintar, disabled=self._pintar)
+
+    def _ajustar(self, *_):
+        self._forma.pos = self.pos
+        self._forma.size = self.size
+
+    def _pintar(self, *_):
+        if self.disabled:
+            self._tinta.rgba = CINZA_OFF
+        elif self.state == "down":
+            self._tinta.rgba = self._cor_press
+        else:
+            self._tinta.rgba = self._cor
+
+
 class OpcaoEscura(SpinnerOption):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -128,29 +187,17 @@ class OpcaoEscura(SpinnerOption):
         self.height = dp(48)
 
 
-def alinhar(lbl):
-    """Faz halign/valign valerem (text_size acompanha o widget)."""
-    lbl.bind(size=lambda i, v: setattr(i, "text_size", v))
-    return lbl
-
-
-def rotulo(texto, tamanho=13, cor=MUTED, negrito=False, altura=None):
-    return alinhar(Label(text=texto, font_size=sp(tamanho), color=cor,
-                         bold=negrito, size_hint_y=None,
-                         height=dp(altura or 24), halign="left",
-                         valign="middle"))
-
-
 class Tela(ScrollView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.regiao = "auto"
         self.rigoroso = False
+        self._ultima_amostra = None
         self._arquivo_saida = os.path.join(_RAIZ, "saida_mobile.png")
         _placeholder(self._arquivo_saida)
 
         col = BoxLayout(orientation="vertical", size_hint_y=None,
-                        spacing=dp(10), padding=dp(12))
+                        spacing=dp(8), padding=dp(12))
         col.bind(minimum_height=col.setter("height"))
         self.add_widget(col)
 
@@ -163,17 +210,17 @@ class Tela(ScrollView):
                        pos=lambda i, v: setattr(_r, "pos", v))
         col.add_widget(faixa)
 
-        topo = BoxLayout(size_hint_y=None, height=dp(52), spacing=dp(10))
+        topo = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(8))
         selo = Label(text="P", font_size=sp(20), bold=True, color=TEXT,
-                     size_hint_x=None, width=dp(40))
+                     size_hint_x=None, width=dp(38))
         with selo.canvas.before:
             Color(*RED)
             _s = RoundedRectangle(radius=[dp(10)])
             selo.bind(size=lambda i, v: setattr(_s, "size", v),
                       pos=lambda i, v: setattr(_s, "pos", v))
         topo.add_widget(selo)
-        topo.add_widget(alinhar(Label(text="RECONHECIMENTO DE PLACAS",
-                                      font_size=sp(15), bold=True, color=RED,
+        topo.add_widget(alinhar(Label(text="Reconhecimento de placas",
+                                      font_size=sp(15), bold=True, color=TEXT,
                                       halign="left", valign="middle")))
         self.status_dot = Label(text="●", font_size=sp(14), color=AMBAR,
                                 size_hint_x=None, width=dp(20))
@@ -186,69 +233,72 @@ class Tela(ScrollView):
         col.add_widget(topo)
 
         # Preview.
-        moldura = Card(size_hint_y=None, height=dp(300),
-                       padding=dp(10))
+        moldura = Card(size_hint_y=None, height=dp(240), padding=dp(8))
         self.preview = Image(source=self._arquivo_saida,
                              allow_stretch=True, keep_ratio=True)
         moldura.add_widget(self.preview)
         col.add_widget(moldura)
 
         # Cartao de resultado (como o do desktop).
-        cartao = Card(size_hint_y=None, height=dp(168), padding=dp(12),
-                      spacing=dp(4), orientation="vertical")
+        cartao = Card(size_hint_y=None, height=dp(150), padding=dp(10),
+                      spacing=dp(2), orientation="vertical")
         cartao.add_widget(rotulo("PLACA DETECTADA", tamanho=11, negrito=True))
-        self.resultado = Label(text="— — —", font_size=sp(40), bold=True,
-                               color=TEXT, size_hint_y=None, height=dp(62))
+        self.resultado = Label(text="— — —", font_size=sp(34), bold=True,
+                               color=TEXT, size_hint_y=None, height=dp(54))
         cartao.add_widget(self.resultado)
-        self.detalhe = alinhar(Label(text="Escolha uma foto ou fotografe",
-                                     font_size=sp(13), color=MUTED,
-                                     size_hint_y=None, height=dp(48),
-                                     halign="left", valign="top"))
+        self.detalhe = alinhar(Label(
+            text="Escolha uma foto, fotografe ou tente uma aleatória",
+            font_size=sp(12), color=MUTED, size_hint_y=None, height=dp(44),
+            halign="left", valign="top"))
         cartao.add_widget(self.detalhe)
         col.add_widget(cartao)
 
         # Controles.
-        controles = Card(size_hint_y=None, height=dp(168), padding=dp(12),
-                         spacing=dp(6), orientation="vertical")
+        controles = Card(size_hint_y=None, height=dp(150), padding=dp(10),
+                         spacing=dp(4), orientation="vertical")
         controles.add_widget(rotulo("Região", tamanho=11, negrito=True))
         self.spinner = Spinner(text="auto", values=REGIOES,
                                option_cls=OpcaoEscura, background_normal="",
                                background_color=PANEL, color=TEXT,
-                               font_size=sp(15), size_hint_y=None,
-                               height=dp(52))
+                               font_size=sp(14), size_hint_y=None,
+                               height=dp(48))
         self.spinner.bind(text=self._ao_trocar_regiao)
         controles.add_widget(self.spinner)
-        linha_rigor = BoxLayout(size_hint_y=None, height=dp(48))
+        linha_rigor = BoxLayout(size_hint_y=None, height=dp(44))
         linha_rigor.add_widget(alinhar(Label(text="Modo rigoroso",
-                                             font_size=sp(14), color=TEXT,
+                                             font_size=sp(13), color=TEXT,
                                              halign="left",
                                              valign="middle")))
         self.check = CheckBox(active=False, color=RED, size_hint_x=None,
-                              width=dp(48))
+                              width=dp(44))
         self.check.bind(active=self._ao_trocar_rigor)
         linha_rigor.add_widget(self.check)
         controles.add_widget(linha_rigor)
         col.add_widget(controles)
 
-        # Botoes.
-        botoes = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(10))
-        b_foto = self._botao("Foto")
+        # Botoes principais.
+        botoes = BoxLayout(size_hint_y=None, height=dp(52), spacing=dp(8))
+        b_foto = BotaoArredondado(text="Foto", font_size=sp(15), bold=True,
+                                  color=TEXT)
         b_foto.bind(on_release=self._escolher_foto)
         botoes.add_widget(b_foto)
-        b_cam = self._botao("Câmera")
+        b_cam = BotaoArredondado(text="Câmera", font_size=sp(15), bold=True,
+                                 color=TEXT)
         b_cam.bind(on_release=self._fotografar)
         botoes.add_widget(b_cam)
         if filechooser is None or camera is None:
             b_foto.disabled = True
             b_cam.disabled = True
-            self._status("PLYER AUSENTE", AMBAR)
+            self._status("SEM PLYER", AMBAR)
         col.add_widget(botoes)
 
-    @staticmethod
-    def _botao(texto):
-        return Button(text=texto, font_size=sp(16), bold=True, color=TEXT,
-                      background_normal="", background_down="",
-                      background_color=RED)
+        # Botao secundario (grafite, como no desktop): foto aleatoria.
+        b_alea = BotaoArredondado(text="Foto aleatória", font_size=sp(14),
+                                  bold=True, color=TEXT, cor=SEC,
+                                  cor_press=SEC_DOWN, size_hint_y=None,
+                                  height=dp(48))
+        b_alea.bind(on_release=self._foto_aleatoria)
+        col.add_widget(b_alea)
 
     def _status(self, texto, cor):
         self.status_txt.text = texto
@@ -276,6 +326,20 @@ class Tela(ScrollView):
         except Exception as exc:
             self._mostrar_erro(f"Falha ao abrir câmera: {exc}")
 
+    def _foto_aleatoria(self, *_):
+        try:
+            lista = _amostras()
+            if not lista:
+                self._mostrar_erro("Sem fotos de exemplo neste aparelho.")
+                return
+            opcoes = [a for a in lista if a != self._ultima_amostra]
+            caminho = random.choice(opcoes or lista)
+            self._ultima_amostra = caminho
+            self._processar(caminho,
+                            legenda=f"Aleatória: {os.path.basename(caminho)}")
+        except Exception as exc:
+            self._mostrar_erro(f"Falha na aleatória: {exc}")
+
     def _ao_selecionar(self, selecao):
         if selecao:
             self._processar(str(selecao[0]))
@@ -284,7 +348,7 @@ class Tela(ScrollView):
         if caminho:
             self._processar(str(caminho))
 
-    def _processar(self, caminho):
+    def _processar(self, caminho, legenda=""):
         self.resultado.text = "..."
         self.detalhe.text = "Analisando..."
         self._status("LENDO", AMBAR)
@@ -296,6 +360,8 @@ class Tela(ScrollView):
                 if img is None:
                     raise ValueError("não foi possível ler a imagem")
                 saida = Motor.combinar(img, regiao, rigoroso)
+                if legenda:
+                    saida["legenda"] = legenda
                 Clock.schedule_once(lambda _dt: self._exibir(saida), 0)
             except Exception as exc:
                 Clock.schedule_once(
@@ -305,17 +371,20 @@ class Tela(ScrollView):
 
     def _exibir(self, saida):
         placa = (saida.get("placa") or "").strip()
+        legenda = saida.get("legenda", "")
+        if legenda:
+            legenda = legenda + " · "
         if placa:
             self.resultado.text = placa
             self.detalhe.text = (
-                f"{saida.get('rotulo', '')} · "
+                f"{legenda}{saida.get('rotulo', '')} · "
                 f"certeza {saida.get('certeza', 0)} "
                 f"({saida.get('nivel', '')}) via {saida.get('fonte', '')}"
             )
             self._status("OK", VERDE)
         else:
             self.resultado.text = "NÃO ENCONTRADA"
-            self.detalhe.text = ("Sem evidência suficiente — "
+            self.detalhe.text = (f"{legenda}Sem evidência suficiente — "
                                  "o app não inventa placa.")
             self._status("VAZIO", AMBAR)
         try:

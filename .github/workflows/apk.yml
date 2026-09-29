@@ -48,6 +48,9 @@ jobs:
              Preprocesso.py PossivelPlaca.py PossivelCaractere.py \
              classifications.txt flattened_images.txt \
              base_kNN_ampla.npy classes_kNN_ampla.npy mobile_app/
+          mkdir -p mobile_app/amostras
+          cp imagens/13.png imagens/4.png imagens/10.png imagens/1.png \
+             imagens/11.png mobile_app/amostras/
 
       - uses: actions/setup-java@v4
         with:

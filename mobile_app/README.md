@@ -19,6 +19,9 @@ Na raiz do projeto:
 cp Motor.py Main.py DetectarPlacas.py DetectarCaracteres.py Preprocesso.py \
    PossivelPlaca.py PossivelCaractere.py classifications.txt \
    flattened_images.txt base_kNN_ampla.npy classes_kNN_ampla.npy mobile_app/
+mkdir -p mobile_app/amostras
+cp imagens/13.png imagens/4.png imagens/10.png imagens/1.png \
+   imagens/11.png mobile_app/amostras/
 ```
 
 ## 2. Build (Colab/Linux — buildozer não roda no Windows)
