@@ -228,15 +228,18 @@ class Tela(ScrollView):
         super().__init__(**kwargs)
         self.regiao = "auto"
         self.rigoroso = False
+        self.knn_ok = False
         self._ultima_amostra = None
         self._arquivo_saida = os.path.join(_RAIZ, "saida_mobile.png")
         _placeholder(self._arquivo_saida)
+        # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
+        # nascem vazios e nada e detectado. Bloqueia deteccao ate o fim.
+        threading.Thread(target=self._treinar, daemon=True).start()
 
         col = BoxLayout(orientation="vertical", size_hint_y=None,
                         spacing=dp(8), padding=dp(12))
         col.bind(minimum_height=col.setter("height"))
         self.add_widget(col)
-
         # Faixa vermelha + cabecalho com selo P e status.
         faixa = BoxLayout(size_hint_y=None, height=dp(3))
         with faixa.canvas.before:
@@ -261,7 +264,7 @@ class Tela(ScrollView):
         self.status_dot = Label(text="●", font_size=sp(14), color=AMBAR,
                                 size_hint_x=None, width=dp(20))
         topo.add_widget(self.status_dot)
-        self.status_txt = alinhar(Label(text="PRONTO", font_size=sp(11),
+        self.status_txt = alinhar(Label(text="TREINANDO", font_size=sp(11),
                                          color=MUTED, size_hint_x=None,
                                          width=dp(52), halign="left",
                                          valign="middle"))
@@ -340,6 +343,16 @@ class Tela(ScrollView):
         self.status_txt.text = texto
         self.status_dot.color = cor
 
+    def _treinar(self):
+        self._status("TREINANDO", AMBAR)
+        try:
+            self.knn_ok = bool(Motor.treinar())
+        except Exception:
+            self.knn_ok = False
+        Clock.schedule_once(
+            lambda _dt: self._status("PRONTO" if self.knn_ok else "SEM KNN",
+                                     VERDE if self.knn_ok else RED), 0)
+
     def _ao_trocar_regiao(self, spinner, texto):
         self.regiao = (texto or "auto").lower()
 
@@ -385,6 +398,10 @@ class Tela(ScrollView):
             self._processar(str(caminho))
 
     def _processar(self, caminho, legenda=""):
+        if not self.knn_ok:
+            self.resultado.text = "..."
+            self.detalhe.text = "Aguarde o fim do treinamento."
+            return
         self.resultado.text = "..."
         self.detalhe.text = "Analisando..."
         self._status("LENDO", AMBAR)
