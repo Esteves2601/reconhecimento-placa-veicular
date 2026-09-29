@@ -126,9 +126,11 @@ jobs:
           path: mobile_app/bin/*.apk
 
       - name: Publicar Release
-        # Publica por padrao (push); no disparo manual, desmarque a caixa
-        # para publicar so o Artifact.
-        if: ${{ success() && inputs.release != false }}
+        # Push publica sempre; no disparo manual, a caixa controla.
+        # (No push o contexto inputs nao existe, por isso o teste direto
+        # com inputs.release falhava e pulava a Release.)
+        if: ${{ success() && (github.event_name != 'workflow_dispatch'
+          || inputs.release != false) }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-debug-${{ github.run_number }}
