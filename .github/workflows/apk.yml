@@ -77,20 +77,45 @@ jobs:
         if: failure()
         run: |
           python3 - "$GITHUB_WORKSPACE/build.log" <<'EOF'
-          import sys
-          txt = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          import re, sys
+          txt = open(sys.argv[1], encoding="utf-8",
+                     errors="replace").read()
           linhas = [l for l in txt.splitlines() if l.strip()]
-          cauda = "\n".join(linhas[-25:])
-          chaves = [l for l in linhas
-                    if ("rror" in l or "xception" in l or "FAILED" in l)
-                    and "errorlevel" not in l.lower()][-10:]
-          msg = "FALHA BUILD-APK | ultimas linhas:\n" + cauda
+          # remove o despejo de ambiente do buildozer (polui a cauda)
+          uteis = [l for l in linhas
+                   if not re.match(r"^#\s+[A-Z_]+ = ", l)]
+          # blocos de traceback com contexto
+          blocos = []
+          for i, l in enumerate(uteis):
+              if ("Traceback" in l or "Command failed" in l
+                      or "CalledProcessError" in l):
+                  blocos += uteis[max(0, i - 2):i + 12]
+          chaves = [l for l in uteis
+                    if re.search(r"(Error|Exception|FAILED|"
+                                 r"E: |sdkmanager|BUILD FAILED)", l)
+                    and "errorlevel" not in l.lower()
+                    and "raise" not in l][-15:]
+          partes = []
+          if blocos:
+              partes.append("--- traceback/comando ---\n"
+                            + "\n".join(blocos[:40]))
           if chaves:
-              msg += "\n--- erros detectados ---\n" + "\n".join(chaves)
+              partes.append("--- erros ---\n" + "\n".join(chaves))
+          partes.append("--- cauda ---\n"
+                        + "\n".join(uteis[-40:]))
+          msg = ("FALHA BUILD-APK\n"
+                 + "\n".join(partes))
           msg = (msg.replace("%", "%25").replace("\r", "%0D")
-                    .replace("\n", "%0A"))[:6000]
+                    .replace("\n", "%0A"))[:30000]
           print(f"::error::{msg}")
           EOF
+
+      - name: Anexar log completo (Artifact)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Anexar APK (Artifact)
         if: success()
