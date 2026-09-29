@@ -1,0 +1,15 @@
+# Copias de build: o motor mora na raiz, INTACTO.
+# Estes nomes sao gerados pelo passo 1 do README e nunca commitados.
+Motor.py
+Main.py
+DetectarPlacas.py
+DetectarCaracteres.py
+Preprocesso.py
+PossivelPlaca.py
+PossivelCaractere.py
+classifications.txt
+flattened_images.txt
+base_kNN_ampla.npy
+classes_kNN_ampla.npy
+saida_mobile.png
+foto_mobile.jpg
