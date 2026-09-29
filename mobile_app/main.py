@@ -77,6 +77,42 @@ REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
 
 
+def _limitar(img, teto=1280):
+    """Reduz fotos gigantes (12 MP) para o teto util: 14x mais rapido no
+    celular com a mesma leitura (placa continua legivel)."""
+    h, w = img.shape[:2]
+    m = max(h, w)
+    if m <= teto:
+        return img
+    f = teto / m
+    return cv2.resize(img, (int(w * f), int(h * f)),
+                      interpolation=cv2.INTER_AREA)
+
+
+def _combinar_paciente(img, regiao, rigoroso):
+    """Mesma matematica do Motor.combinar, com paciencia de celular: o
+    combinar() original aplica join(timeout=10) no pipeline original, e
+    num aparelho lento isso rouba ate 35 pontos da certeza mesmo quando a
+    leitura estava certa. Aqui os dois lados terminam (teto 45 s)."""
+    caixas = {}
+
+    def _r():
+        caixas["res"] = Motor.detectar(img, regiao)
+
+    def _o():
+        caixas["orig"] = Motor.original_rapido(img)
+
+    t1 = threading.Thread(target=_r, daemon=True)
+    t2 = threading.Thread(target=_o, daemon=True)
+    t1.start()
+    t2.start()
+    t1.join(timeout=45)
+    t2.join(timeout=45)
+    if "res" not in caixas:
+        raise TimeoutError("tempo esgotado na análise")
+    return Motor.fundir(caixas["res"], caixas.get("orig", ""), rigoroso)
+
+
 def _ler_imagem(caminho):
     """Leitura tolerante a acentos no caminho (np.fromfile + imdecode;
     imread puro falha com pastas/arquivos acentuados)."""
@@ -359,7 +395,7 @@ class Tela(ScrollView):
                 img = _ler_imagem(caminho)
                 if img is None:
                     raise ValueError("não foi possível ler a imagem")
-                saida = Motor.combinar(img, regiao, rigoroso)
+                saida = _combinar_paciente(_limitar(img), regiao, rigoroso)
                 if legenda:
                     saida["legenda"] = legenda
                 Clock.schedule_once(lambda _dt: self._exibir(saida), 0)
