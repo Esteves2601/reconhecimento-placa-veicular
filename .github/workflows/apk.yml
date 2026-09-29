@@ -1,8 +1,10 @@
 # Gera o APK do placas na nuvem (buildozer nao roda no Windows).
+# Buildozer instalado direto no runner (a action Docker de terceiros
+# quebrou: "Docker build failed"). Runner pinado no 24.04 para fugir da
+# migracao do ubuntu-latest para 26.04.
 # - Push com mudanca em mobile_app/** OU botao Run workflow: builda o APK
-#   debug e anexa como Artifact (precisa login no GitHub para baixar).
-# - Run workflow com "Publicar Release" marcado: cria Release com o APK
-#   (download direto no celular, sem login, link HTTPS).
+#   debug, anexa como Artifact e publica Release (download direto,
+#   sem login) por padrao.
 # O APK debug instala com avisos do Play Protect (certificado debug).
 # O release limpo (keystore proprio) entra depois via Secrets.
 
@@ -25,7 +27,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -36,11 +38,27 @@ jobs:
              classifications.txt flattened_images.txt \
              base_kNN_ampla.npy classes_kNN_ampla.npy mobile_app/
 
-      - name: Build APK debug
-        uses: ArtemSBulgakov/buildozer-action@v1
+      - uses: actions/setup-java@v4
         with:
-          workdir: mobile_app
-          buildozer_version: stable
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar dependencias do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake \
+            libffi-dev libssl-dev libltdl-dev
+
+      - name: Instalar buildozer
+        run: |
+          pip install --user --break-system-packages \
+            buildozer cython==0.29.33
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build APK debug
+        working-directory: mobile_app
+        run: buildozer android debug
 
       - name: Anexar APK (Artifact)
         uses: actions/upload-artifact@v4
