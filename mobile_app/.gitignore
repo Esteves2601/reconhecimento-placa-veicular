@@ -13,3 +13,6 @@ base_kNN_ampla.npy
 classes_kNN_ampla.npy
 saida_mobile.png
 foto_mobile.jpg
+# Excecao: o entrypoint Kivy. (No Windows o gitignore e case-insensitive e
+# o padrao Main.py acima engoliria main.py.)
+!main.py
