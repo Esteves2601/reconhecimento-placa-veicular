@@ -69,9 +69,31 @@ jobs:
 
       - name: Build APK debug
         working-directory: mobile_app
-        run: buildozer android debug
+        run: |
+          set -o pipefail
+          buildozer android debug 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Publicar diagnostico da falha
+        if: failure()
+        run: |
+          python3 - "$GITHUB_WORKSPACE/build.log" <<'EOF'
+          import sys
+          txt = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          linhas = [l for l in txt.splitlines() if l.strip()]
+          cauda = "\n".join(linhas[-25:])
+          chaves = [l for l in linhas
+                    if ("rror" in l or "xception" in l or "FAILED" in l)
+                    and "errorlevel" not in l.lower()][-10:]
+          msg = "FALHA BUILD-APK | ultimas linhas:\n" + cauda
+          if chaves:
+              msg += "\n--- erros detectados ---\n" + "\n".join(chaves)
+          msg = (msg.replace("%", "%25").replace("\r", "%0D")
+                    .replace("\n", "%0A"))[:6000]
+          print(f"::error::{msg}")
+          EOF
 
       - name: Anexar APK (Artifact)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: placas-debug
@@ -80,7 +102,7 @@ jobs:
       - name: Publicar Release
         # Publica por padrao (push); no disparo manual, desmarque a caixa
         # para publicar so o Artifact.
-        if: ${{ inputs.release != false }}
+        if: ${{ success() && inputs.release != false }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-debug-${{ github.run_number }}
