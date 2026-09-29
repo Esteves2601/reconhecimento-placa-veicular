@@ -34,6 +34,7 @@ import Motor  # noqa: E402
 
 from kivy.app import App  # noqa: E402
 from kivy.clock import Clock  # noqa: E402
+from kivy.core.window import Window  # noqa: E402
 from kivy.utils import get_color_from_hex  # noqa: E402
 from kivy.uix.boxlayout import BoxLayout  # noqa: E402
 from kivy.uix.button import Button  # noqa: E402
@@ -204,6 +205,7 @@ class Tela(BoxLayout):
 class AppPlacas(App):
     def build(self):
         self.title = "Reconhecimento de Placas"
+        Window.clearcolor = FUNDO
         return Tela()
 
 

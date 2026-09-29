@@ -33,7 +33,8 @@ source.exclude_patterns = README.md,.gitignore,*.spec
 
 # (list) Requisitos Python (receitas p4a). Sem tkinter/customtkinter: o
 # main.py usa stub de tkinter porque essas UIs nao existem no Android.
-requirements = python3,kivy,plyer,numpy,opencv,requests
+# pyjnius = ponte que o plyer (foto/camera) usa no runtime.
+requirements = python3,kivy,plyer,pyjnius,numpy,opencv,requests
 
 # (str) Orientacao de tela
 orientation = portrait
@@ -48,11 +49,16 @@ fullscreen = 0
 android.permissions = CAMERA
 
 # (int) API Android: 34 (exigencia da Play desde ago/2024; api 33 ou menor
-# = aviso/bloqueio). NDK travado para build reproduzivel.
+# = aviso/bloqueio). NDK travado para build reproduzivel. ndk_api >= 24
+# porque a receita numpy do p4a EXIGE (build quebra com 21).
 android.api = 34
 android.minapi = 24
 android.ndk = 25b
-android.ndk_api = 21
+android.ndk_api = 24
+
+# (list) Arquiteturas: so arm64 (100% dos celulares relevantes desde 2017).
+# Incluir armeabi-v7a dobra o tempo e o disco do build sem beneficio real.
+android.archs = arm64-v8a
 
 # (str) Branch python-for-android (master = toolchain atual)
 p4a.branch = master
