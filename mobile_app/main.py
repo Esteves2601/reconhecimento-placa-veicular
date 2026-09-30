@@ -76,7 +76,7 @@ PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
 # Versao do conteudo do app (exibida no rodape; o versionCode do APK nao
 # muda para a loja tratar como atualizacao). Ver mobile_app/DEBUG.md.
-VERSAO = "1.4"
+VERSAO = "1.5"
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
@@ -189,6 +189,21 @@ def _ler_imagem(caminho):
         return None
     except Exception:
         return None
+
+
+def _selftest_ml():
+    """Teste unitario do KNN no aparelho: treina 2 amostras sinteticas e
+    pergunta de volta. Esperado 'A'. Se der outra coisa, o cv2.ml do
+    aparelho nao funciona (e nenhum leitor KNN funcionara)."""
+    try:
+        dados = np.float32([[0] * 600, [255] * 600])
+        rotulos = np.float32([[65], [66]])
+        knn = cv2.ml.KNearest_create()
+        knn.train(dados, cv2.ml.ROW_SAMPLE, rotulos)
+        _r, res, _v, _d = knn.findNearest(np.float32([[0] * 600]), k=1)
+        return chr(int(res[0][0]))
+    except Exception as exc:
+        return f"ERRO:{type(exc).__name__}"
 
 
 def _placeholder(caminho):
@@ -416,8 +431,9 @@ class Tela(ScrollView):
         b_alea.bind(on_release=self._foto_aleatoria)
         col.add_widget(b_alea)
 
-        col.add_widget(rotulo(f"v{VERSAO} · motor KNN local",
-                              tamanho=10, altura=20))
+        self.lbl_versao = rotulo(f"v{VERSAO} · ml:-- · auto:--",
+                                  tamanho=10, altura=20)
+        col.add_widget(self.lbl_versao)
 
         # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
         # nascem vazios e nada e detectado. SEMPRE por ultimo no __init__:
@@ -457,9 +473,35 @@ class Tela(ScrollView):
             except Exception:
                 pass
             self._status("PRONTO", VERDE)
+            self._autoteste()
         except Exception:
             self.knn_ok = False
             self._status("SEM KNN", RED)
+
+    def _autoteste(self):
+        """Prova no aparelho: KNN sintetico + deteccao real na amostra 5.
+        Resultado vai para o rodape (ml:X · auto:Y)."""
+        ml = _selftest_ml()
+        auto = "--"
+        try:
+            alvos = [a for a in _amostras()
+                     if os.path.basename(a) == "5.png"] or _amostras()
+            if alvos:
+                img = _limitar(_ler_imagem(alvos[0]))
+                if img is not None:
+                    saida = _combinar_paciente(img, "auto", False)
+                    auto = (saida.get("placa") or
+                            f"E{saida.get('certeza', 0)}")
+        except Exception as exc:
+            auto = f"X99-{type(exc).__name__}"
+        texto = f"v{VERSAO} · ml:{ml} · auto:{auto}"
+        Clock.schedule_once(lambda _dt: self._atualiza_rodape(texto), 0)
+
+    def _atualiza_rodape(self, texto):
+        try:
+            self.lbl_versao.text = texto
+        except Exception:
+            pass
 
     def _ao_trocar_regiao(self, spinner, texto):
         self.regiao = (texto or "auto").lower()
@@ -560,7 +602,10 @@ class Tela(ScrollView):
         else:
             self.resultado.text = "NÃO ENCONTRADA"
             motivos = ", ".join(saida.get("motivos", []) or [])
-            detalhe_extra = f"[E{saida.get('certeza', 0)}]"
+            detalhe_extra = f"[E{saida.get('certeza', 0)}"
+            if saida.get("original"):
+                detalhe_extra += f" orig:{saida.get('original')}"
+            detalhe_extra += "]"
             if motivos:
                 detalhe_extra += f" {motivos}"
             self.detalhe.text = (f"{legenda}{detalhe_extra}. "

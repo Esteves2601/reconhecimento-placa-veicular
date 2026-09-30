@@ -16,3 +16,14 @@ informe: **código + versão do rodapé (vX.Y) + origem da foto**
 | `X99-*` | Erro inesperado (`*` = tipo) | Informar o código completo |
 
 Sucesso mostra a placa + `certeza` + `via` (leitor que acertou).
+
+## Linha do rodapé (auto-diagnóstico no aparelho)
+
+`v1.5 · ml:A · auto:NVSBLE` — informe ela junto com o código.
+
+- `ml:A` = KNN do aparelho funciona (teste sintético passou).
+  `ml:ERRO-*` = cv2.ml quebrado no aparelho: nenhum leitor KNN
+  funcionará, o problema é na toolchain, não nas fotos.
+- `auto:<placa>` = deteção real na foto de exemplo passou.
+  `auto:E<certeza>` = falhou com aquela certeza (mesma tabela acima).
+  `auto:--` = o treino da etapa 2 não terminou (treino travado).
