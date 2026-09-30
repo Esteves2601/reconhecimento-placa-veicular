@@ -114,6 +114,59 @@ def _combinar_paciente(img, regiao, rigoroso):
     return Motor.fundir(caixas["res"], caixas.get("orig", ""), rigoroso)
 
 
+def _orientacao_exif(caminho):
+    """Le o tag Orientation do EXIF (JPEG de celular) em puro Python.
+    Retorna 1 se ausente/ilegivel. O cv2 ignora EXIF: foto de camera em
+    retrato chega girada 90 graus e nenhuma placa e legivel."""
+    try:
+        with open(caminho, "rb") as f:
+            dados = f.read(128 * 1024)
+        if dados[0:2] != b"\xff\xd8":
+            return 1
+        i = 2
+        while i + 4 < len(dados):
+            if dados[i] != 0xFF:
+                break
+            marca = dados[i + 1]
+            tam = (dados[i + 2] << 8) + dados[i + 3]
+            if marca == 0xE1 and dados[i + 4:i + 10] == b"Exif\x00\x00":
+                t = i + 10
+                if dados[t:t + 2] == b"II":
+                    endian = "<"
+                elif dados[t:t + 2] == b"MM":
+                    endian = ">"
+                else:
+                    return 1
+                import struct as _st
+                base = t
+                off = _st.unpack(endian + "I", dados[t + 4:t + 8])[0]
+                n = _st.unpack(endian + "H",
+                               dados[base + off:base + off + 2])[0]
+                for k in range(n):
+                    e = base + off + 2 + 12 * k
+                    tag, tipo, num = _st.unpack(
+                        endian + "HHI", dados[e:e + 8])
+                    if tag == 0x0112 and tipo == 3 and num == 1:
+                        return _st.unpack(endian + "H", dados[e + 8:e + 10])[0]
+                return 1
+            if marca in (0xD8, 0xD9):
+                break
+            i += 2 + tam
+    except Exception:
+        pass
+    return 1
+
+
+def _desgirar(img, orientacao):
+    if orientacao == 3:
+        return cv2.rotate(img, cv2.ROTATE_180)
+    if orientacao == 6:
+        return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    if orientacao == 8:
+        return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return img
+
+
 def _ler_imagem(caminho):
     """Leitura tolerante a acentos no caminho (np.fromfile + imdecode;
     imread puro falha com pastas/arquivos acentuados)."""
@@ -122,11 +175,14 @@ def _ler_imagem(caminho):
         if buf.size:
             img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
             if img is not None:
-                return img
+                return _desgirar(img, _orientacao_exif(caminho))
     except Exception:
         pass
     try:
-        return cv2.imread(caminho)
+        img = cv2.imread(caminho)
+        if img is not None:
+            return _desgirar(img, _orientacao_exif(caminho))
+        return None
     except Exception:
         return None
 
@@ -480,7 +536,12 @@ class Tela(ScrollView):
             self._status("OK", VERDE)
         else:
             self.resultado.text = "NÃO ENCONTRADA"
-            self.detalhe.text = (f"{legenda}Sem evidência suficiente — "
+            motivos = ", ".join(saida.get("motivos", []) or [])
+            detalhe_extra = f"certeza {saida.get('certeza', 0)}"
+            if motivos:
+                detalhe_extra += f": {motivos}"
+            self.detalhe.text = (f"{legenda}{detalhe_extra}. "
+                                 "Sem evidência suficiente — "
                                  "o app não inventa placa.")
             self._status("VAZIO", AMBAR)
         try:
