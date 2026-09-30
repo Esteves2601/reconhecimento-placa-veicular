@@ -74,6 +74,10 @@ CINZA_OFF = get_color_from_hex("#3a3a42")
 
 PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
+# Versao do conteudo do app (exibida no rodape; o versionCode do APK nao
+# muda para a loja tratar como atualizacao). Ver mobile_app/DEBUG.md.
+VERSAO = "1.4"
+
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
 
@@ -305,6 +309,7 @@ class Tela(ScrollView):
         self.regiao = "auto"
         self.rigoroso = False
         self.knn_ok = False
+        self._treino_falhou = False
         self._ultima_amostra = None
         self._arquivo_saida = os.path.join(_RAIZ, "saida_mobile.png")
         _placeholder(self._arquivo_saida)
@@ -411,6 +416,9 @@ class Tela(ScrollView):
         b_alea.bind(on_release=self._foto_aleatoria)
         col.add_widget(b_alea)
 
+        col.add_widget(rotulo(f"v{VERSAO} · motor KNN local",
+                              tamanho=10, altura=20))
+
         # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
         # nascem vazios e nada e detectado. SEMPRE por ultimo no __init__:
         # a thread toca nos widgets de status, que precisam ja existir
@@ -439,6 +447,7 @@ class Tela(ScrollView):
                 ok1 = False
             self.knn_ok = ok1
             if not ok1:
+                self._treino_falhou = True
                 self._status("SEM KNN", RED)
                 return
             self._status("PRONTO", VERDE)
@@ -464,7 +473,7 @@ class Tela(ScrollView):
                                             "*.bmp", "*.webp"],
                                   on_selection=self._ao_selecionar)
         except Exception as exc:
-            self._mostrar_erro(f"Falha ao abrir galeria: {exc}")
+            self._mostrar_erro(f"Falha ao abrir galeria: {exc}", "D01")
 
     def _fotografar(self, *_):
         destino = os.path.join(_RAIZ, "foto_mobile.jpg")
@@ -472,13 +481,14 @@ class Tela(ScrollView):
             camera.take_picture(filename=destino,
                                 on_complete=self._ao_fotografar)
         except Exception as exc:
-            self._mostrar_erro(f"Falha ao abrir câmera: {exc}")
+            self._mostrar_erro(f"Falha ao abrir câmera: {exc}", "D01")
 
     def _foto_aleatoria(self, *_):
         try:
             lista = _amostras()
             if not lista:
-                self._mostrar_erro("Sem fotos de exemplo neste aparelho.")
+                self._mostrar_erro("Sem fotos de exemplo neste aparelho.",
+                                     "D01")
                 return
             opcoes = [a for a in lista if a != self._ultima_amostra]
             caminho = random.choice(opcoes or lista)
@@ -486,7 +496,7 @@ class Tela(ScrollView):
             self._processar(caminho,
                             legenda=f"Aleatória: {os.path.basename(caminho)}")
         except Exception as exc:
-            self._mostrar_erro(f"Falha na aleatória: {exc}")
+            self._mostrar_erro(f"Falha na aleatória: {exc}", "D01")
 
     def _ao_selecionar(self, selecao):
         if selecao:
@@ -499,7 +509,11 @@ class Tela(ScrollView):
     def _processar(self, caminho, legenda=""):
         if not self.knn_ok:
             self.resultado.text = "..."
-            self.detalhe.text = "Aguarde o fim do treinamento."
+            if self._treino_falhou:
+                self.detalhe.text = ("[K00] Sem base KNN: reinicie o app. "
+                                     "Se repetir, me informe o código K00.")
+            else:
+                self.detalhe.text = "[T00] Aguarde o fim do treinamento."
             return
         self.resultado.text = "..."
         self.detalhe.text = "Analisando..."
@@ -515,9 +529,18 @@ class Tela(ScrollView):
                 if legenda:
                     saida["legenda"] = legenda
                 Clock.schedule_once(lambda _dt: self._exibir(saida), 0)
+            except TimeoutError:
+                Clock.schedule_once(
+                    lambda _dt: self._mostrar_erro(
+                        "Tempo esgotado na análise.", "T02"), 0)
+            except ValueError as exc:
+                Clock.schedule_once(
+                    lambda _dt: self._mostrar_erro(str(exc), "L01"), 0)
             except Exception as exc:
                 Clock.schedule_once(
-                    lambda _dt: self._mostrar_erro(str(exc)), 0)
+                    lambda _dt: self._mostrar_erro(
+                        f"{type(exc).__name__}: {exc}",
+                        f"X99-{type(exc).__name__}"), 0)
 
         threading.Thread(target=_alvo, daemon=True).start()
 
@@ -537,9 +560,9 @@ class Tela(ScrollView):
         else:
             self.resultado.text = "NÃO ENCONTRADA"
             motivos = ", ".join(saida.get("motivos", []) or [])
-            detalhe_extra = f"certeza {saida.get('certeza', 0)}"
+            detalhe_extra = f"[E{saida.get('certeza', 0)}]"
             if motivos:
-                detalhe_extra += f": {motivos}"
+                detalhe_extra += f" {motivos}"
             self.detalhe.text = (f"{legenda}{detalhe_extra}. "
                                  "Sem evidência suficiente — "
                                  "o app não inventa placa.")
@@ -553,9 +576,9 @@ class Tela(ScrollView):
         except Exception:
             pass
 
-    def _mostrar_erro(self, mensagem):
+    def _mostrar_erro(self, mensagem, codigo="X99"):
         self.resultado.text = "ERRO"
-        self.detalhe.text = mensagem[:200]
+        self.detalhe.text = f"[{codigo}] {mensagem[:180]}"
         self._status("ERRO", RED)
 
 

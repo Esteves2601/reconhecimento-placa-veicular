@@ -29,7 +29,7 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,txt,npy
 
 # (list) Arquivos fora do APK
-source.exclude_patterns = README.md,.gitignore,*.spec
+source.exclude_patterns = README.md,DEBUG.md,.gitignore,*.spec
 
 # (list) Requisitos Python (receitas p4a). Sem tkinter/customtkinter: o
 # main.py usa stub de tkinter porque essas UIs nao existem no Android.
