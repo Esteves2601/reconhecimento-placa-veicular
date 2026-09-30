@@ -36,11 +36,12 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
 import Motor  # noqa: E402
+import DetectarCaracteres  # noqa: E402 (treino em 2 etapas, ver _treinar)
 
 from kivy.app import App  # noqa: E402
 from kivy.clock import Clock  # noqa: E402
 from kivy.core.window import Window  # noqa: E402
-from kivy.graphics import Color, RoundedRectangle  # noqa: E402
+from kivy.graphics import Color, Ellipse, RoundedRectangle  # noqa: E402
 from kivy.metrics import dp, sp  # noqa: E402
 from kivy.uix.boxlayout import BoxLayout  # noqa: E402
 from kivy.uix.button import Button  # noqa: E402
@@ -214,6 +215,25 @@ class BotaoArredondado(Button):
             self._tinta.rgba = self._cor
 
 
+class Ponto(BoxLayout):
+    """Bolinha de status desenhada (o glifo ● nao existe na fonte Android)."""
+
+    def __init__(self, cor=AMBAR, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas:
+            self._tinta = Color(*cor)
+            self._bola = Ellipse()
+        self.bind(size=self._ajustar, pos=self._ajustar)
+
+    def _ajustar(self, *_):
+        d = min(self.width, self.height) * 0.55
+        self._bola.size = (d, d)
+        self._bola.pos = (self.center_x - d / 2, self.center_y - d / 2)
+
+    def set(self, cor):
+        self._tinta.rgba = cor
+
+
 class OpcaoEscura(SpinnerOption):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -259,14 +279,13 @@ class Tela(ScrollView):
                       pos=lambda i, v: setattr(_s, "pos", v))
         topo.add_widget(selo)
         topo.add_widget(alinhar(Label(text="Reconhecimento de placas",
-                                      font_size=sp(15), bold=True, color=TEXT,
+                                      font_size=sp(14), bold=True, color=TEXT,
                                       halign="left", valign="middle")))
-        self.status_dot = Label(text="●", font_size=sp(14), color=AMBAR,
-                                size_hint_x=None, width=dp(20))
+        self.status_dot = Ponto(cor=AMBAR, size_hint_x=None, width=dp(20))
         topo.add_widget(self.status_dot)
         self.status_txt = alinhar(Label(text="TREINANDO", font_size=sp(11),
                                          color=MUTED, size_hint_x=None,
-                                         width=dp(52), halign="left",
+                                         width=dp(76), halign="left",
                                          valign="middle"))
         topo.add_widget(self.status_txt)
         col.add_widget(topo)
@@ -341,17 +360,31 @@ class Tela(ScrollView):
 
     def _status(self, texto, cor):
         self.status_txt.text = texto
-        self.status_dot.color = cor
+        try:
+            self.status_dot.set(cor)
+        except Exception:
+            pass
 
     def _treinar(self):
-        self._status("TREINANDO", AMBAR)
+        # Em 2 etapas: a 1 (KNN pequeno) libera o app em segundos; a 2
+        # (base ampla de 37 MB) pode demorar minutos num aparelho lento e
+        # so adiciona o leitor extra (R5) — o app ja funciona sem ela.
+        self._status("TREINO 1/2", AMBAR)
         try:
-            self.knn_ok = bool(Motor.treinar())
+            ok1 = bool(DetectarCaracteres.loadKNNDataAndTrainKNN())
         except Exception:
-            self.knn_ok = False
-        Clock.schedule_once(
-            lambda _dt: self._status("PRONTO" if self.knn_ok else "SEM KNN",
-                                     VERDE if self.knn_ok else RED), 0)
+            ok1 = False
+        self.knn_ok = ok1
+        if not ok1:
+            self._status("SEM KNN", RED)
+            return
+        self._status("PRONTO", VERDE)
+        self._status("TREINO 2/2", AMBAR)
+        try:
+            Motor.carregar_amplo()
+        except Exception:
+            pass
+        self._status("PRONTO", VERDE)
 
     def _ao_trocar_regiao(self, spinner, texto):
         self.regiao = (texto or "auto").lower()
