@@ -252,9 +252,6 @@ class Tela(ScrollView):
         self._ultima_amostra = None
         self._arquivo_saida = os.path.join(_RAIZ, "saida_mobile.png")
         _placeholder(self._arquivo_saida)
-        # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
-        # nascem vazios e nada e detectado. Bloqueia deteccao ate o fim.
-        threading.Thread(target=self._treinar, daemon=True).start()
 
         col = BoxLayout(orientation="vertical", size_hint_y=None,
                         spacing=dp(8), padding=dp(12))
@@ -358,9 +355,17 @@ class Tela(ScrollView):
         b_alea.bind(on_release=self._foto_aleatoria)
         col.add_widget(b_alea)
 
+        # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
+        # nascem vazios e nada e detectado. SEMPRE por ultimo no __init__:
+        # a thread toca nos widgets de status, que precisam ja existir
+        # (iniciar antes = crash silencioso e "TREINANDO" eterno).
+        threading.Thread(target=self._treinar, daemon=True).start()
+
     def _status(self, texto, cor):
-        self.status_txt.text = texto
         try:
+            txt = getattr(self, "status_txt", None)
+            if txt is not None:
+                txt.text = texto
             self.status_dot.set(cor)
         except Exception:
             pass
@@ -369,22 +374,27 @@ class Tela(ScrollView):
         # Em 2 etapas: a 1 (KNN pequeno) libera o app em segundos; a 2
         # (base ampla de 37 MB) pode demorar minutos num aparelho lento e
         # so adiciona o leitor extra (R5) — o app ja funciona sem ela.
-        self._status("TREINO 1/2", AMBAR)
+        # Tudo protegido: thread que morre em silencio = "TREINANDO" eterno.
         try:
-            ok1 = bool(DetectarCaracteres.loadKNNDataAndTrainKNN())
+            self._status("TREINO 1/2", AMBAR)
+            try:
+                ok1 = bool(DetectarCaracteres.loadKNNDataAndTrainKNN())
+            except Exception:
+                ok1 = False
+            self.knn_ok = ok1
+            if not ok1:
+                self._status("SEM KNN", RED)
+                return
+            self._status("PRONTO", VERDE)
+            self._status("TREINO 2/2", AMBAR)
+            try:
+                Motor.carregar_amplo()
+            except Exception:
+                pass
+            self._status("PRONTO", VERDE)
         except Exception:
-            ok1 = False
-        self.knn_ok = ok1
-        if not ok1:
+            self.knn_ok = False
             self._status("SEM KNN", RED)
-            return
-        self._status("PRONTO", VERDE)
-        self._status("TREINO 2/2", AMBAR)
-        try:
-            Motor.carregar_amplo()
-        except Exception:
-            pass
-        self._status("PRONTO", VERDE)
 
     def _ao_trocar_regiao(self, spinner, texto):
         self.regiao = (texto or "auto").lower()
