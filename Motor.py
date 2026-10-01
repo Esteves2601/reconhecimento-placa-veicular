@@ -453,6 +453,21 @@ def _acordo(textos, consenso):
     return ok * 10 >= len(consenso) * 6
 
 
+def _tem_regional(votos, regiao):
+    """S4: ja existe leitura com padrao regional? Se sim, as varreduras
+    extras da cena so somam ruido e tempo (o ranking decide com estes
+    votos, como ja ocorre no corte por estouro)."""
+    for texto, _fonte in votos:
+        try:
+            pv, _c, rv = interpretar(texto, regiao)
+        except Exception:
+            continue
+        if pv and (rv or "").split(" ·")[0] in ("Brasil", "Argentina",
+                                                "Uruguai", "Paraguai"):
+            return True
+    return False
+
+
 def detectar(img_bgr, regiao="auto", debug=False):
     """Retorna dict(placa, anotada, recorte, analise, rotulo, fonte,
     detalhe). Teto de ~14 s.
@@ -570,6 +585,8 @@ def detectar(img_bgr, regiao="auto", debug=False):
                 break
         if estouro():
             break
+        if _tem_regional(votos, regiao):
+            break  # S4: leitura regional garantida; poupa varreduras
         try:
             placas = DetectarCaracteres.DetectarCaracteresNasPlacas(
                 regioes[:8])
@@ -715,6 +732,7 @@ def fundir(res, orig, rigoroso=False):
              else "média" if pontos >= limiar else "baixa")
     saida = dict(res)
     saida.update({"placa": placa if (placa and pontos >= limiar) else "",
+                  "provavel": placa,
                   "certeza": pontos, "nivel": nivel, "limiar": limiar,
                   "motivos": motivos, "original": orig})
     return saida

@@ -599,6 +599,14 @@ class Tela(ScrollView):
                 f"({saida.get('nivel', '')}) via {saida.get('fonte', '')}"
             )
             self._status("OK", VERDE)
+        elif saida.get("provavel"):
+            self.resultado.text = f"PROVÁVEL: {saida.get('provavel')}"
+            self.detalhe.text = (
+                f"{legenda}[E{saida.get('certeza', 0)}] "
+                f"{saida.get('rotulo', '')} via {saida.get('fonte', '')} "
+                f"(abaixo do limiar — confira na imagem)."
+            )
+            self._status("DUVIDA", AMBAR)
         else:
             self.resultado.text = "NÃO ENCONTRADA"
             motivos = ", ".join(saida.get("motivos", []) or [])

@@ -330,6 +330,11 @@ class App(ctk.CTk):
         if placa:
             self.lbl_placa.configure(text=placa)
             self.logar(f"Placa: {placa} [{rotulo}]{como}{det}{niv}{mot}")
+        elif res.get("provavel"):
+            prov = res.get("provavel")
+            self.lbl_placa.configure(text=f"PROVÁVEL: {prov}")
+            self.logar(f"Provável: {prov} [{rotulo}]{como}{det}{niv}{mot} "
+                       f"(abaixo do limiar)")
         else:
             self.lbl_placa.configure(text="NÃO ENCONTRADA")
             if "certeza" in res:
