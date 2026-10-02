@@ -1,13 +1,12 @@
-"""App Android do Reconhecimento de Placas (Kivy).
+"""App Android do Reconhecimento de Placas (Kivy) — v1.6.
 
-Espelha o visual do desktop (Interface.py: grafite + vermelho), adaptado
-para smartphone: compacto, cantos arredondados, botoes secundarios grafite
-e foto aleatoria inclusa (como no desktop).
+Visual espelhado no desktop (grafite + vermelho), adaptado para celular:
+cartoes arredondados, placa confirmada em branco / provavel em ambar,
+barra de certeza, historico das ultimas leituras, status animado.
 
-Usa o Motor.py ORIGINAL como biblioteca (copias de build, sem alteracoes
-nos arquivos da raiz). Regras herdadas do projeto:
-- originais nunca sao modificados, so usados como biblioteca;
-- sem chave de busca: o app nao inventa placa (exibe so com evidencia).
+Motor original usado como biblioteca (copias de build, arquivos da raiz
+intactos). Regras: nada inventado (porteira de certeza), erro sempre com
+codigo (ver mobile_app/DEBUG.md).
 
 Detalhe tecnico: Main.py importa tkinter no topo (so usa dentro de
 selecionarImagem(), que o mobile nunca chama). Como tkinter nao existe no
@@ -25,8 +24,7 @@ os.chdir(_RAIZ)  # DetectarCaracteres carrega os .txt via caminho relativo
 if _RAIZ not in sys.path:
     sys.path.insert(0, _RAIZ)
 
-# Stub do tkinter (ver docstring acima): Main.py faz
-# `import tkinter as tk` + `from tkinter import filedialog` no topo.
+# Stub do tkinter (ver docstring acima).
 _tk = types.ModuleType("tkinter")
 _tk.filedialog = types.ModuleType("tkinter.filedialog")
 sys.modules.setdefault("tkinter", _tk)
@@ -58,7 +56,8 @@ except Exception:  # desktop sem plyer: botoes de captura desabilitados
     camera = None
     filechooser = None
 
-# Paleta do desktop (Interface.py). Secundario = botoes grafite do desktop.
+# ---------------------------------------------------------------- paleta
+# Mesmas cores do desktop (Interface.py). SEC = botoes secundarios grafite.
 BG = get_color_from_hex("#0b0b0d")
 PANEL = get_color_from_hex("#131316")
 CARD = get_color_from_hex("#1b1b1f")
@@ -74,17 +73,20 @@ CINZA_OFF = get_color_from_hex("#3a3a42")
 
 PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
-# Versao do conteudo do app (exibida no rodape; o versionCode do APK nao
-# muda para a loja tratar como atualizacao). Ver mobile_app/DEBUG.md.
-VERSAO = "1.5"
+# Versao do conteudo (rodapé; versionCode do APK nao muda para a loja
+# tratar como atualizacao). Ver mobile_app/DEBUG.md.
+VERSAO = "1.6"
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
 
+TETO_LARGURA = 1280  # fotos maiores sao reduzidas (14x mais rapido)
+TETO_ANALISE_S = 45  # paciencia por deteccao (UI segue responsiva)
 
-def _limitar(img, teto=1280):
-    """Reduz fotos gigantes (12 MP) para o teto util: 14x mais rapido no
-    celular com a mesma leitura (placa continua legivel)."""
+
+# ---------------------------------------------------------------- motor
+def _limitar(img, teto=TETO_LARGURA):
+    """Reduz fotos gigantes para o teto util (placa segue legivel)."""
     h, w = img.shape[:2]
     m = max(h, w)
     if m <= teto:
@@ -98,7 +100,7 @@ def _combinar_paciente(img, regiao, rigoroso):
     """Mesma matematica do Motor.combinar, com paciencia de celular: o
     combinar() original aplica join(timeout=10) no pipeline original, e
     num aparelho lento isso rouba ate 35 pontos da certeza mesmo quando a
-    leitura estava certa. Aqui os dois lados terminam (teto 45 s)."""
+    leitura estava certa. Aqui os dois lados terminam."""
     caixas = {}
 
     def _r():
@@ -111,17 +113,17 @@ def _combinar_paciente(img, regiao, rigoroso):
     t2 = threading.Thread(target=_o, daemon=True)
     t1.start()
     t2.start()
-    t1.join(timeout=45)
-    t2.join(timeout=45)
+    t1.join(timeout=TETO_ANALISE_S)
+    t2.join(timeout=TETO_ANALISE_S)
     if "res" not in caixas:
         raise TimeoutError("tempo esgotado na análise")
     return Motor.fundir(caixas["res"], caixas.get("orig", ""), rigoroso)
 
 
 def _orientacao_exif(caminho):
-    """Le o tag Orientation do EXIF (JPEG de celular) em puro Python.
-    Retorna 1 se ausente/ilegivel. O cv2 ignora EXIF: foto de camera em
-    retrato chega girada 90 graus e nenhuma placa e legivel."""
+    """Tag Orientation do EXIF (JPEG de celular) em puro Python. Retorna 1
+    se ausente/ilegivel. O cv2 ignora EXIF: foto em retrato chega girada
+    90 graus e nenhuma placa fica legivel."""
     try:
         with open(caminho, "rb") as f:
             dados = f.read(128 * 1024)
@@ -148,10 +150,11 @@ def _orientacao_exif(caminho):
                                dados[base + off:base + off + 2])[0]
                 for k in range(n):
                     e = base + off + 2 + 12 * k
-                    tag, tipo, num = _st.unpack(
-                        endian + "HHI", dados[e:e + 8])
+                    tag, tipo, num = _st.unpack(endian + "HHI",
+                                               dados[e:e + 8])
                     if tag == 0x0112 and tipo == 3 and num == 1:
-                        return _st.unpack(endian + "H", dados[e + 8:e + 10])[0]
+                        return _st.unpack(endian + "H",
+                                          dados[e + 8:e + 10])[0]
                 return 1
             if marca in (0xD8, 0xD9):
                 break
@@ -172,8 +175,7 @@ def _desgirar(img, orientacao):
 
 
 def _ler_imagem(caminho):
-    """Leitura tolerante a acentos no caminho (np.fromfile + imdecode;
-    imread puro falha com pastas/arquivos acentuados)."""
+    """Leitura tolerante a acentos (fromfile+imdecode) e a rotacao EXIF."""
     try:
         buf = np.fromfile(caminho, dtype=np.uint8)
         if buf.size:
@@ -189,21 +191,6 @@ def _ler_imagem(caminho):
         return None
     except Exception:
         return None
-
-
-def _selftest_ml():
-    """Teste unitario do KNN no aparelho: treina 2 amostras sinteticas e
-    pergunta de volta. Esperado 'A'. Se der outra coisa, o cv2.ml do
-    aparelho nao funciona (e nenhum leitor KNN funcionara)."""
-    try:
-        dados = np.float32([[0] * 600, [255] * 600])
-        rotulos = np.float32([[65], [66]])
-        knn = cv2.ml.KNearest_create()
-        knn.train(dados, cv2.ml.ROW_SAMPLE, rotulos)
-        _r, res, _v, _d = knn.findNearest(np.float32([[0] * 600]), k=1)
-        return chr(int(res[0][0]))
-    except Exception as exc:
-        return f"ERRO:{type(exc).__name__}"
 
 
 def _placeholder(caminho):
@@ -224,6 +211,21 @@ def _amostras():
     return [a for a in arqs if os.path.isfile(a)]
 
 
+def _selftest_ml():
+    """KNN sintetico no aparelho: espera 'A'. Se falhar, o cv2.ml do
+    aparelho nao funciona (nenhum leitor KNN funcionara)."""
+    try:
+        dados = np.float32([[0] * 600, [255] * 600])
+        rotulos = np.float32([[65], [66]])
+        knn = cv2.ml.KNearest_create()
+        knn.train(dados, cv2.ml.ROW_SAMPLE, rotulos)
+        _r, res, _v, _d = knn.findNearest(np.float32([[0] * 600]), k=1)
+        return chr(int(res[0][0]))
+    except Exception as exc:
+        return f"ERRO:{type(exc).__name__}"
+
+
+# ---------------------------------------------------------------- widgets
 def alinhar(lbl):
     """Faz halign/valign valerem (text_size acompanha o widget)."""
     lbl.bind(size=lambda i, v: setattr(i, "text_size", v))
@@ -238,7 +240,7 @@ def rotulo(texto, tamanho=12, cor=MUTED, negrito=False, altura=None):
 
 
 class Card(BoxLayout):
-    """Cartao escuro com borda fina (efeito via dois retangulos)."""
+    """Cartao escuro com borda fina e cantos arredondados."""
 
     def __init__(self, borda=RED, fundo=CARD, raio=None, esp=None,
                  **kwargs):
@@ -259,6 +261,25 @@ class Card(BoxLayout):
         self._r1.size = self.size
         self._r2.pos = (self.x + e, self.y + e)
         self._r2.size = (self.width - 2 * e, self.height - 2 * e)
+
+
+class Ponto(BoxLayout):
+    """Bolinha de status desenhada (o glifo unicode nao existe na fonte)."""
+
+    def __init__(self, cor=AMBAR, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas:
+            self._tinta = Color(*cor)
+            self._bola = Ellipse()
+        self.bind(size=self._ajustar, pos=self._ajustar)
+
+    def _ajustar(self, *_):
+        d = min(self.width, self.height) * 0.55
+        self._bola.size = (d, d)
+        self._bola.pos = (self.center_x - d / 2, self.center_y - d / 2)
+
+    def set(self, cor):
+        self._tinta.rgba = cor
 
 
 class BotaoArredondado(Button):
@@ -290,25 +311,6 @@ class BotaoArredondado(Button):
             self._tinta.rgba = self._cor
 
 
-class Ponto(BoxLayout):
-    """Bolinha de status desenhada (o glifo ● nao existe na fonte Android)."""
-
-    def __init__(self, cor=AMBAR, **kwargs):
-        super().__init__(**kwargs)
-        with self.canvas:
-            self._tinta = Color(*cor)
-            self._bola = Ellipse()
-        self.bind(size=self._ajustar, pos=self._ajustar)
-
-    def _ajustar(self, *_):
-        d = min(self.width, self.height) * 0.55
-        self._bola.size = (d, d)
-        self._bola.pos = (self.center_x - d / 2, self.center_y - d / 2)
-
-    def set(self, cor):
-        self._tinta.rgba = cor
-
-
 class OpcaoEscura(SpinnerOption):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -318,6 +320,35 @@ class OpcaoEscura(SpinnerOption):
         self.height = dp(48)
 
 
+class BarraCerteza(BoxLayout):
+    """Barra fina proporcional a certeza (vermelha < limiar, verde >=)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(size_hint_y=None, height=dp(6), **kwargs)
+        with self.canvas:
+            Color(*PANEL)
+            self._fundo = RoundedRectangle(radius=[dp(3)])
+            self._tinta = Color(*RED)
+            self._barra = RoundedRectangle(radius=[dp(3)])
+        self.bind(size=self._ajustar, pos=self._ajustar)
+        self._valor = 0
+        self._limiar = 55
+
+    def _ajustar(self, *_):
+        self._fundo.pos = self.pos
+        self._fundo.size = self.size
+        larg = self.width * max(0, min(self._valor, 100)) / 100.0
+        self._barra.pos = self.pos
+        self._barra.size = (larg, self.height)
+
+    def set(self, valor, limiar=55):
+        self._valor = valor or 0
+        self._limiar = limiar
+        self._tinta.rgba = VERDE if self._valor >= limiar else RED
+        self._ajustar()
+
+
+# ---------------------------------------------------------------- tela
 class Tela(ScrollView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -326,6 +357,8 @@ class Tela(ScrollView):
         self.knn_ok = False
         self._treino_falhou = False
         self._ultima_amostra = None
+        self._busy_ev = None
+        self._busy_n = 0
         self._arquivo_saida = os.path.join(_RAIZ, "saida_mobile.png")
         _placeholder(self._arquivo_saida)
 
@@ -333,6 +366,7 @@ class Tela(ScrollView):
                         spacing=dp(8), padding=dp(12))
         col.bind(minimum_height=col.setter("height"))
         self.add_widget(col)
+
         # Faixa vermelha + cabecalho com selo P e status.
         faixa = BoxLayout(size_hint_y=None, height=dp(3))
         with faixa.canvas.before:
@@ -371,18 +405,31 @@ class Tela(ScrollView):
         col.add_widget(moldura)
 
         # Cartao de resultado (como o do desktop).
-        cartao = Card(size_hint_y=None, height=dp(150), padding=dp(10),
+        cartao = Card(size_hint_y=None, height=dp(168), padding=dp(10),
                       spacing=dp(2), orientation="vertical")
         cartao.add_widget(rotulo("PLACA DETECTADA", tamanho=11, negrito=True))
         self.resultado = Label(text="— — —", font_size=sp(34), bold=True,
                                color=TEXT, size_hint_y=None, height=dp(54))
         cartao.add_widget(self.resultado)
+        self.barra = BarraCerteza()
+        cartao.add_widget(self.barra)
         self.detalhe = alinhar(Label(
             text="Escolha uma foto, fotografe ou tente uma aleatória",
             font_size=sp(12), color=MUTED, size_hint_y=None, height=dp(44),
             halign="left", valign="top"))
         cartao.add_widget(self.detalhe)
         col.add_widget(cartao)
+
+        # Historico das ultimas leituras.
+        hist = Card(size_hint_y=None, height=dp(118), padding=dp(10),
+                    spacing=dp(2), orientation="vertical")
+        hist.add_widget(rotulo("ÚLTIMAS LEITURAS", tamanho=11, negrito=True))
+        self.hist_linhas = []
+        for _ in range(3):
+            linha = rotulo("—", tamanho=12, altura=22)
+            self.hist_linhas.append(linha)
+            hist.add_widget(linha)
+        col.add_widget(hist)
 
         # Controles.
         controles = Card(size_hint_y=None, height=dp(150), padding=dp(10),
@@ -432,15 +479,15 @@ class Tela(ScrollView):
         col.add_widget(b_alea)
 
         self.lbl_versao = rotulo(f"v{VERSAO} · ml:-- · auto:--",
-                                  tamanho=10, altura=20)
+                                 tamanho=10, altura=20)
         col.add_widget(self.lbl_versao)
 
-        # Treino KNN em fundo, como o desktop: sem isso os leitores KNN
-        # nascem vazios e nada e detectado. SEMPRE por ultimo no __init__:
-        # a thread toca nos widgets de status, que precisam ja existir
-        # (iniciar antes = crash silencioso e "TREINANDO" eterno).
+        # Treino KNN em fundo, como o desktop. SEMPRE por ultimo: a thread
+        # toca nos widgets de status, que precisam ja existir (iniciar
+        # antes = crash silencioso e "TREINANDO" eterno).
         threading.Thread(target=self._treinar, daemon=True).start()
 
+    # ---------------------------------------------------------- estado
     def _status(self, texto, cor):
         try:
             txt = getattr(self, "status_txt", None)
@@ -451,9 +498,8 @@ class Tela(ScrollView):
             pass
 
     def _treinar(self):
-        # Em 2 etapas: a 1 (KNN pequeno) libera o app em segundos; a 2
-        # (base ampla de 37 MB) pode demorar minutos num aparelho lento e
-        # so adiciona o leitor extra (R5) — o app ja funciona sem ela.
+        # Etapa 1 (KNN pequeno) libera o app em segundos; etapa 2 (base
+        # ampla de 37 MB) pode demorar e so adiciona o leitor extra (R5).
         # Tudo protegido: thread que morre em silencio = "TREINANDO" eterno.
         try:
             self._status("TREINO 1/2", AMBAR)
@@ -503,6 +549,34 @@ class Tela(ScrollView):
         except Exception:
             pass
 
+    def _ocupado(self, ligado):
+        try:
+            if self._busy_ev is not None:
+                self._busy_ev.cancel()
+                self._busy_ev = None
+            if ligado:
+                self._busy_n = 0
+                self._busy_ev = Clock.schedule_interval(
+                    self._anima_status, 0.4)
+        except Exception:
+            pass
+
+    def _anima_status(self, _dt):
+        try:
+            self._busy_n = (self._busy_n + 1) % 4
+            self.status_txt.text = "LENDO" + "." * self._busy_n
+        except Exception:
+            pass
+
+    def _historico(self, texto):
+        try:
+            for i in range(len(self.hist_linhas) - 1, 0, -1):
+                self.hist_linhas[i].text = self.hist_linhas[i - 1].text
+            self.hist_linhas[0].text = texto[:48]
+        except Exception:
+            pass
+
+    # ---------------------------------------------------------- eventos
     def _ao_trocar_regiao(self, spinner, texto):
         self.regiao = (texto or "auto").lower()
 
@@ -530,7 +604,7 @@ class Tela(ScrollView):
             lista = _amostras()
             if not lista:
                 self._mostrar_erro("Sem fotos de exemplo neste aparelho.",
-                                     "D01")
+                                   "D01")
                 return
             opcoes = [a for a in lista if a != self._ultima_amostra]
             caminho = random.choice(opcoes or lista)
@@ -558,8 +632,10 @@ class Tela(ScrollView):
                 self.detalhe.text = "[T00] Aguarde o fim do treinamento."
             return
         self.resultado.text = "..."
+        self.resultado.color = TEXT
         self.detalhe.text = "Analisando..."
-        self._status("LENDO", AMBAR)
+        self.barra.set(0)
+        self._ocupado(True)
         regiao, rigoroso = self.regiao, self.rigoroso
 
         def _alvo():
@@ -587,30 +663,40 @@ class Tela(ScrollView):
         threading.Thread(target=_alvo, daemon=True).start()
 
     def _exibir(self, saida):
+        self._ocupado(False)
         placa = (saida.get("placa") or "").strip()
+        certeza = saida.get("certeza", 0) or 0
+        limiar = saida.get("limiar", 55) or 55
         legenda = saida.get("legenda", "")
         if legenda:
             legenda = legenda + " · "
+        self.barra.set(certeza, limiar)
         if placa:
             self.resultado.text = placa
+            self.resultado.color = TEXT
             self.detalhe.text = (
                 f"{legenda}{saida.get('rotulo', '')} · "
-                f"certeza {saida.get('certeza', 0)} "
+                f"certeza {certeza} "
                 f"({saida.get('nivel', '')}) via {saida.get('fonte', '')}"
             )
             self._status("OK", VERDE)
+            self._historico(f"{placa} · {certeza}")
         elif saida.get("provavel"):
-            self.resultado.text = f"PROVÁVEL: {saida.get('provavel')}"
+            prov = saida.get("provavel")
+            self.resultado.text = f"PROVÁVEL: {prov}"
+            self.resultado.color = AMBAR
             self.detalhe.text = (
-                f"{legenda}[E{saida.get('certeza', 0)}] "
-                f"{saida.get('rotulo', '')} via {saida.get('fonte', '')} "
-                f"(abaixo do limiar — confira na imagem)."
+                f"{legenda}[E{certeza}] {saida.get('rotulo', '')} "
+                f"via {saida.get('fonte', '')} (abaixo do limiar — "
+                f"confira na imagem)."
             )
             self._status("DUVIDA", AMBAR)
+            self._historico(f"~{prov} · {certeza}")
         else:
             self.resultado.text = "NÃO ENCONTRADA"
+            self.resultado.color = TEXT
             motivos = ", ".join(saida.get("motivos", []) or [])
-            detalhe_extra = f"[E{saida.get('certeza', 0)}"
+            detalhe_extra = f"[E{certeza}"
             if saida.get("original"):
                 detalhe_extra += f" orig:{saida.get('original')}"
             detalhe_extra += "]"
@@ -620,17 +706,11 @@ class Tela(ScrollView):
                                  "Sem evidência suficiente — "
                                  "o app não inventa placa.")
             self._status("VAZIO", AMBAR)
-        try:
-            anotada = saida.get("anotada")
-            if anotada is not None:
-                cv2.imwrite(self._arquivo_saida, anotada)
-                self.preview.source = self._arquivo_saida
-                self.preview.reload()
-        except Exception:
-            pass
 
     def _mostrar_erro(self, mensagem, codigo="X99"):
+        self._ocupado(False)
         self.resultado.text = "ERRO"
+        self.resultado.color = TEXT
         self.detalhe.text = f"[{codigo}] {mensagem[:180]}"
         self._status("ERRO", RED)
 
