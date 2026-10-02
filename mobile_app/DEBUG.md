@@ -19,7 +19,7 @@ Sucesso mostra a placa + `certeza` + `via` (leitor que acertou).
 
 ## Linha do rodapé (auto-diagnóstico no aparelho)
 
-`v1.5 · ml:A · auto:NVSBLE` — informe ela junto com o código.
+`v1.7 · ml:A · auto:E10 · dados:3c7ec9a8` — informe ela junto com o código.
 
 - `ml:A` = KNN do aparelho funciona (teste sintético passou).
   `ml:ERRO-*` = cv2.ml quebrado no aparelho: nenhum leitor KNN
@@ -27,3 +27,6 @@ Sucesso mostra a placa + `certeza` + `via` (leitor que acertou).
 - `auto:<placa>` = deteção real na foto de exemplo passou.
   `auto:E<certeza>` = falhou com aquela certeza (mesma tabela acima).
   `auto:--` = o treino da etapa 2 não terminou (treino travado).
+- `dados:3c7ec9a8` = arquivos de treino íntegros (MD5 do repo).
+  Qualquer outro valor (ou `SEM-ARQ`) = empacotamento corrompido:
+  os leitores treinam com dados errados e nada funciona.

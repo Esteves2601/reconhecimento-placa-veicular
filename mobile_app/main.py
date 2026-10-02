@@ -75,7 +75,7 @@ PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
 # Versao do conteudo (rodapé; versionCode do APK nao muda para a loja
 # tratar como atualizacao). Ver mobile_app/DEBUG.md.
-VERSAO = "1.6"
+VERSAO = "1.7"
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
@@ -209,6 +209,25 @@ def _amostras():
     except Exception:
         arqs = []
     return [a for a in arqs if os.path.isfile(a)]
+
+
+def _hash_dados():
+    """MD5 curto dos 3 arquivos de treino (detecta empacotamento
+    corrompido: hash diferente do repo = dados adulterados no APK)."""
+    import hashlib
+    h = hashlib.md5()
+    try:
+        for nome in ("classifications.txt", "flattened_images.txt",
+                     "base_kNN_ampla.npy", "classes_kNN_ampla.npy"):
+            with open(os.path.join(_RAIZ, nome), "rb") as f:
+                while True:
+                    bloco = f.read(1024 * 1024)
+                    if not bloco:
+                        break
+                    h.update(bloco)
+        return h.hexdigest()[:8]
+    except Exception:
+        return "SEM-ARQ"
 
 
 def _selftest_ml():
@@ -525,8 +544,9 @@ class Tela(ScrollView):
             self._status("SEM KNN", RED)
 
     def _autoteste(self):
-        """Prova no aparelho: KNN sintetico + deteccao real na amostra 5.
-        Resultado vai para o rodape (ml:X · auto:Y)."""
+        """Prova no aparelho: KNN sintetico + deteccao real na amostra 5
+        + integridade dos dados de treino. Tudo vai para o rodape
+        (ml:X · auto:Y · dados:Z)."""
         ml = _selftest_ml()
         auto = "--"
         try:
@@ -540,7 +560,8 @@ class Tela(ScrollView):
                             f"E{saida.get('certeza', 0)}")
         except Exception as exc:
             auto = f"X99-{type(exc).__name__}"
-        texto = f"v{VERSAO} · ml:{ml} · auto:{auto}"
+        dados = _hash_dados()
+        texto = f"v{VERSAO} · ml:{ml} · auto:{auto} · dados:{dados}"
         Clock.schedule_once(lambda _dt: self._atualiza_rodape(texto), 0)
 
     def _atualiza_rodape(self, texto):
@@ -706,6 +727,19 @@ class Tela(ScrollView):
                                  "Sem evidência suficiente — "
                                  "o app não inventa placa.")
             self._status("VAZIO", AMBAR)
+        try:
+            anotada = saida.get("anotada")
+            if anotada is not None:
+                # Arquivo por deteccao (nunca reutilizar o placeholder):
+                # alem de evitar cache de textura, prova o que foi analisado.
+                self._n_img = getattr(self, "_n_img", 0) + 1
+                caminho = os.path.join(
+                    _RAIZ, f"vista_{self._n_img % 8}.png")
+                if cv2.imwrite(caminho, anotada):
+                    self.preview.source = caminho
+                    self.preview.reload()
+        except Exception:
+            pass
 
     def _mostrar_erro(self, mensagem, codigo="X99"):
         self._ocupado(False)
