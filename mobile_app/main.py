@@ -75,7 +75,7 @@ PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
 # Versao do conteudo (rodapé; versionCode do APK nao muda para a loja
 # tratar como atualizacao). Ver mobile_app/DEBUG.md.
-VERSAO = "1.7"
+VERSAO = "1.8"
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
@@ -212,20 +212,22 @@ def _amostras():
 
 
 def _hash_dados():
-    """MD5 curto dos 3 arquivos de treino (detecta empacotamento
-    corrompido: hash diferente do repo = dados adulterados no APK)."""
+    """MD5 curto POR ARQUIVO dos dados de treino (detecta qual arquivo o
+    empacotamento corrompeu: comparar posicao a posicao com o repo)."""
     import hashlib
-    h = hashlib.md5()
+    partes = []
     try:
         for nome in ("classifications.txt", "flattened_images.txt",
                      "base_kNN_ampla.npy", "classes_kNN_ampla.npy"):
+            h = hashlib.md5()
             with open(os.path.join(_RAIZ, nome), "rb") as f:
                 while True:
                     bloco = f.read(1024 * 1024)
                     if not bloco:
                         break
                     h.update(bloco)
-        return h.hexdigest()[:8]
+            partes.append(h.hexdigest()[:4])
+        return "-".join(partes)
     except Exception:
         return "SEM-ARQ"
 
