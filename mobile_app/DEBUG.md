@@ -24,9 +24,16 @@ Sucesso mostra a placa + `certeza` + `via` (leitor que acertou).
 - `ml:A` = KNN do aparelho funciona (teste sintético passou).
   `ml:ERRO-*` = cv2.ml quebrado no aparelho: nenhum leitor KNN
   funcionará, o problema é na toolchain, não nas fotos.
-- `auto:<placa>` = deteção real na foto de exemplo passou.
+- `ktr:S` = KNN original treinado de verdade (`isTrained`).
+  `ktr:N` com treino "OK" = treino silenciosamente falho no aparelho
+  (modelo vazio: leitores mudos, E10 em tudo).
+- `amp:S` = base ampla carregada. `amp:N` = só KNN original.
   `auto:E<certeza>` = falhou com aquela certeza (mesma tabela acima).
   `auto:--` = o treino da etapa 2 não terminou (treino travado).
+- `ktr:S` = KNN original treinado de verdade (`isTrained`).
+  `ktr:N` com treino "OK" = treino silenciosamente falho no aparelho
+  (modelo vazio: leitores mudos, E10 em tudo).
+- `amp:S` = base ampla carregada. `amp:N` = só KNN original.
 - `dados:7b86-3d12-97ef-d719` = arquivos íntegros (MD5 do repo, na
   ordem classifications, flattened, base, classes). Qualquer posição
   diferente (ou `SEM-ARQ`) = aquele arquivo chegou corrompido no APK:

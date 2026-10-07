@@ -75,7 +75,7 @@ PASTA_AMOSTRAS = os.path.join(_RAIZ, "amostras")
 
 # Versao do conteudo (rodapé; versionCode do APK nao muda para a loja
 # tratar como atualizacao). Ver mobile_app/DEBUG.md.
-VERSAO = "1.8"
+VERSAO = "1.9"
 
 REGIOES = ("auto", "brasil", "argentina", "uruguai", "paraguai",
            "internacional")
@@ -376,6 +376,8 @@ class Tela(ScrollView):
         self.regiao = "auto"
         self.rigoroso = False
         self.knn_ok = False
+        self._ktr = False
+        self._amp = False
         self._treino_falhou = False
         self._ultima_amostra = None
         self._busy_ev = None
@@ -529,6 +531,10 @@ class Tela(ScrollView):
             except Exception:
                 ok1 = False
             self.knn_ok = ok1
+            try:
+                self._ktr = bool(DetectarCaracteres.kNearest.isTrained())
+            except Exception:
+                self._ktr = False
             if not ok1:
                 self._treino_falhou = True
                 self._status("SEM KNN", RED)
@@ -539,6 +545,10 @@ class Tela(ScrollView):
                 Motor.carregar_amplo()
             except Exception:
                 pass
+            try:
+                self._amp = Motor.knn_amplo is not None
+            except Exception:
+                self._amp = False
             self._status("PRONTO", VERDE)
             self._autoteste()
         except Exception:
@@ -563,7 +573,10 @@ class Tela(ScrollView):
         except Exception as exc:
             auto = f"X99-{type(exc).__name__}"
         dados = _hash_dados()
-        texto = f"v{VERSAO} · ml:{ml} · auto:{auto} · dados:{dados}"
+        ktr = "S" if getattr(self, "_ktr", False) else "N"
+        amp = "S" if getattr(self, "_amp", False) else "N"
+        texto = (f"v{VERSAO} · ml:{ml} · ktr:{ktr} · amp:{amp} · "
+                 f"auto:{auto} · dados:{dados}")
         Clock.schedule_once(lambda _dt: self._atualiza_rodape(texto), 0)
 
     def _atualiza_rodape(self, texto):
