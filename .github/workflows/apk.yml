@@ -11,27 +11,14 @@
 name: APK Placas
 
 on:
-  push:
-    paths:
-      - "mobile_app/**"
-      - ".github/workflows/apk.yml"
-      - "Motor.py"
-      - "Main.py"
-      - "DetectarPlacas.py"
-      - "DetectarCaracteres.py"
-      - "Preprocesso.py"
-      - "PossivelPlaca.py"
-      - "PossivelCaractere.py"
-      - "classifications.txt"
-      - "flattened_images.txt"
-      - "base_kNN_ampla.npy"
-      - "classes_kNN_ampla.npy"
+  # Push NAO dispara build (APK fora da vitrine por enquanto).
+  # Build manual: Actions > APK Placas > Run workflow.
   workflow_dispatch:
     inputs:
       release:
         description: "Publicar Release (download direto no celular)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write
