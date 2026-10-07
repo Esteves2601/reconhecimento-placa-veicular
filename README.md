@@ -87,6 +87,15 @@ Erros típicos: 1 caractere em fonte estilizada (`L0LWATT`,
 `NITESIY`). Placas Mercosul reais com fonte padrão passam na conta
 (regional + confirmação do original + conclusão = 90 pontos, limiar 55).
 
+## Base de dados: só as 180 originais
+
+O treino usa exclusivamente as 180 amostras reais do projeto original
+(36 classes, `classifications.txt` + `flattened_images.txt`, intactas
+desde o primeiro commit). Uma base sintética de 16.200 renders chegou a
+existir, mas a ablação mediu 41/100 com ela contra 46/100 sem ela no
+mesmo protocolo — sem ganho, só ruído e 37 MB. Ela foi removida
+(backup guardado fora do repo) e o KNN opera com k=1, como no original.
+
 ## Estrutura
 
 | Arquivo | Papel |
