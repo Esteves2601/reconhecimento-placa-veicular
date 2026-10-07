@@ -22,7 +22,6 @@ biblioteca.
 
 **Motor de decisão (`Motor.py`, novo):**
 - Árvore de decisão em 7 regras ordenadas por força de evidência
-- Terceiro leitor: KNN amplo (k=7, 16.200 amostras) com corroboração
 - Leitor neural EasyOCR (PT+EN) em 4 variantes do recorte
 - Validação por padrão regional: Brasil (antigo e Mercosul), Argentina,
   Uruguai, Paraguai e internacional
@@ -43,12 +42,11 @@ pipeline original.
 
 ## Como funciona
 
-Três leitores independentes votam em cada placa e um porteiro de certeza
+Leitores independentes votam em cada placa e um porteiro de certeza
 só exibe o resultado com evidência suficiente — o sistema prefere dizer
 "não encontrada" a inventar uma leitura:
 
-- **KNN original** (k=1, 180 amostras) sobre a imagem binarizada
-- **KNN amplo** (k=7, 16.200 amostras) com corroboração entre leitores
+- **KNN original** (k=1, 180 amostras reais) sobre a imagem binarizada
 - **EasyOCR** (neural, PT+EN) em 4 variantes do recorte
 - **Consenso posicional** e validação por padrão regional
   (Brasil antigo e Mercosul, Argentina, Uruguai, Paraguai e internacional)

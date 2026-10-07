@@ -9,8 +9,6 @@ PossivelPlaca.py
 PossivelCaractere.py
 classifications.txt
 flattened_images.txt
-base_kNN_ampla.npy
-classes_kNN_ampla.npy
 saida_mobile.png
 foto_mobile.jpg
 amostras/

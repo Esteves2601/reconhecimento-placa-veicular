@@ -18,7 +18,7 @@ Na raiz do projeto:
 ```bash
 cp Motor.py Main.py DetectarPlacas.py DetectarCaracteres.py Preprocesso.py \
    PossivelPlaca.py PossivelCaractere.py classifications.txt \
-   flattened_images.txt base_kNN_ampla.npy classes_kNN_ampla.npy mobile_app/
+   flattened_images.txt mobile_app/
 mkdir -p mobile_app/amostras
 cp imagens/5.png imagens/6.png imagens/9.png imagens/13.png \
    mobile_app/amostras/
