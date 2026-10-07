@@ -9,6 +9,38 @@ Sistema desktop de reconhecimento de placas veiculares com interface
 moderna em preto e vermelho. Projeto acadêmico de Processamento Digital
 de Imagens (UniAteneu).
 
+## Origem
+
+Fork de [franklindias/reconhecimento-placa-veicular](https://github.com/franklindias/reconhecimento-placa-veicular)
+(2016). A base original é o pipeline clássico de PDI: detecção da placa
+na cena (`DetectarPlacas`), segmentação e leitura de caracteres por KNN
+(`DetectarCaracteres`, 180 amostras), com seleção de imagem via diálogo
+Tkinter. Esses arquivos foram mantidos intactos e são usados como
+biblioteca.
+
+## O que mudou neste fork
+
+**Motor de decisão (`Motor.py`, novo):**
+- Árvore de decisão em 7 regras ordenadas por força de evidência
+- Terceiro leitor: KNN amplo (k=7, 16.200 amostras) com corroboração
+- Leitor neural EasyOCR (PT+EN) em 4 variantes do recorte
+- Validação por padrão regional: Brasil (antigo e Mercosul), Argentina,
+  Uruguai, Paraguai e internacional
+- Consenso posicional entre leitores e porteiro de certeza (55/80):
+  sem evidência, o sistema declara "não encontrada" em vez de inventar
+- Leitura "provável" exibida e sinalizada quando retida pela porteira
+- Parada antecipada ao confirmar leitura regional (economia de varreduras)
+
+**Interface (`Interface.py`, nova):**
+- App desktop em CustomTkinter (tema grafite + vermelho): abas de
+  imagem, câmera ao vivo e busca de fotos, seletor de região e de rigor
+- Painéis de análise (binarização) e recorte da placa, cartão de
+  resultado com certeza e log de decisões
+
+**Medido, não prometido:** baterias de 100 casos com gabarito
+(`test_100.py`, `test_suite20.py`) — 65/100 o motor completo, 45/100 o
+pipeline original.
+
 ## Como funciona
 
 Três leitores independentes votam em cada placa e um porteiro de certeza
